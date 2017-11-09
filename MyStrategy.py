@@ -11,7 +11,7 @@ from math import pi
 from functools import reduce
 
 fuzz = 1
-criticaldensity = 1/32 # how tight should the vehicles stay
+criticaldensity = 1/25 # how tight should the vehicles stay
 
 class Area:
   def __init__(self, l: float, r: float, t: float, b: float):
@@ -22,7 +22,9 @@ class Area:
   def copy(a):
     return Area(a.left, a.right, a.top, a.bottom)
   def area(self):
-    return (self.right - self.left) * (self.bottom - self.top)
+    width = (self.right - self.left)
+    height = (self.bottom - self.top)
+    return  width * height + abs(width - height)**2
   def __str__(self):
     return str(self.left) + " <> " + str(self.right) + ":" + str(self.top) + "^V" + str(self.bottom)
 
