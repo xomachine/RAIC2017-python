@@ -50,6 +50,8 @@ class Vehicles(TaggedDict):
         self.by_type.setdefault(i.type, set()).add(i.id)
     self.updated = set()
     for i in world.vehicle_updates:
+      if self[i.id].x != i.x or self[i.id].y != i.y:
+        self.updated.add(i.id)
       self[i.id].update(i)
       if i.durability == 0:
         self.pop(i.id, None)
@@ -57,7 +59,6 @@ class Vehicles(TaggedDict):
           s.discard(i.id)
         for s in self.by_type.values():
           s.discard(i.id)
-      self.updated.add(i.id)
 
 
 class Facilities(TaggedDict):
@@ -108,18 +109,25 @@ def get_square(vehicles: list):
       miny = v.y
     if v.y > maxy:
       maxy = v.y
-  return Area(minx - 5, maxx + 5, miny - 5, maxy + 5)
+  return Area(minx - 6, maxx + 6, miny - 6, maxy + 6)
 
 def at_move_end(watchers: set, actions: deque):
+  nomoveturns = 0
   def do_eventme(s: MyStrategy, w: World):
     intersect = s.worldstate.vehicles.updated & watchers
     if len(intersect) == 0:
-      s.current_action += actions
+      s.nomoveturns += 1
+    else:
+      s.nomoveturns = 0
+    if s.nomoveturns >= 2:
+      print("Move over")
+      s.current_action = actions + s.current_action
       return True
     else:
       return False
   def do_waitme(s: MyStrategy, w: World, m:Move):
     s.events.append(do_eventme)
+    s.nomoveturns = 0
   return do_waitme
 
 def wait(ticks: int):
@@ -250,29 +258,31 @@ def hurricane(s, w:World, m: Move):
   la.right = tl.x
   result = deque([
     select_vehicles(s.full_area),
-    rotate(pi, epicenter),
+    rotate(-pi/8, epicenter),
     wait(30),
     select_vehicles(ta),
-    move(Unit(None, eye_rad, eye_rad)),
-    select_vehicles(ra),
-    move(Unit(None, -eye_rad, eye_rad)),
+    move(Unit(None, eye_rad, 2*eye_rad)),
     select_vehicles(ba),
-    move(Unit(None, -eye_rad, -eye_rad)),
+    move(Unit(None, -eye_rad, -eye_rad*2)),
+    select_vehicles(ra),
+    move(Unit(None, -eye_rad*2, eye_rad)),
     select_vehicles(la),
-    move(Unit(None, eye_rad, -eye_rad)),
+    move(Unit(None, eye_rad*2, -eye_rad)),
     wait(150),
     select_vehicles(s.full_area),
-    rotate(-pi, epicenter),
+    rotate(pi/4, epicenter),
     wait(30),
     select_vehicles(cta),
-    move(Unit(None, -eye_rad, eye_rad)),
-    select_vehicles(cra),
-    move(Unit(None, -eye_rad, -eye_rad)),
+    move(Unit(None, -eye_rad, 2*eye_rad)),
     select_vehicles(cba),
-    move(Unit(None, eye_rad, -eye_rad)),
+    move(Unit(None, eye_rad, -eye_rad*2)),
+    select_vehicles(cra),
+    move(Unit(None, -eye_rad*2, -eye_rad)),
     select_vehicles(cla),
-    move(Unit(None, eye_rad, eye_rad)),
-    wait(150)
+    move(Unit(None, eye_rad*2, eye_rad)),
+    wait(150),
+    select_vehicles(s.full_area),
+    rotate(-pi/4, epicenter),
   ])
   s.current_action = result + s.current_action
 
@@ -286,30 +296,20 @@ def shuffle(s):
     vehicles = vs.resolve(vv)
     varea = get_square(vehicles)
     return (varea, t, vv)
-
-  def act_it(desc: tuple, shift: float, waiter):
-    second_turn = deque([
-      select_vehicles(Area(shift, shift+desc[0].right-desc[0].left,
-                           desc[0].top, desc[0].bottom), vtype = desc[1]),
-      move(Unit(None, 0, 10-desc[0].top)),
-    ])
-    return deque([
-      select_vehicles(desc[0], vtype = desc[1]),
-      move(Unit(None, shift-desc[0].left, 0)),
-      at_move_end(waiter, second_turn)
-    ])
   def do_shuffle(ss: MyStrategy, w: World, m: Move):
     vss = ss.worldstate.vehicles
     myv = vss.resolve(pv)
     mya = get_square(myv)
     print("Area after alighment")
     print(mya)
-    parts = 4
+    parts = 10
     step = (mya.bottom - mya.top) / parts
     central = Area.copy(ss.full_area)
     fragment = (mya.right - mya.left)/3
     central.left = mya.left + fragment
     central.right = mya.left + 2*fragment
+    righter = Area.copy(ss.full_area)
+    righter.left = central.right+2
     lefter = Area.copy(ss.full_area)
     lefter.right = central.left
     half = Area.copy(ss.full_area)
@@ -323,30 +323,48 @@ def shuffle(s):
     ])
     third_turn = deque([
       select_vehicles(lefter),
-      move(Unit(None, central.right - lefter.left, 0)),
-      select_vehicles(central),
-      move(Unit(None, mya.right - central.right, 0)),
+      move(Unit(None, central.left - lefter.left, 0)),
+      select_vehicles(righter),
+      move(Unit(None, central.left - righter.left, 0)),
       wait(50),
       at_move_end(pv, fourth_turn)
     ])
     second_turn = deque([
-      select_vehicles(ss.full_area, vtype = VehicleType.HELICOPTER),
+      select_vehicles(ss.full_area, vtype = VehicleType.FIGHTER),
       move(Unit(None, 0, step+1)),
       select_vehicles(ss.full_area, vtype = VehicleType.ARRV),
-      move(Unit(None, 0, step+2)),
+      move(Unit(None, 0, step+1)),
       select_vehicles(ss.full_area, vtype = VehicleType.IFV),
       move(Unit(None, 0, 2*step+3)),
       wait(50),
       at_move_end(pv, third_turn)
       ])
     ss.current_action.appendleft(at_move_end(pv, second_turn))
-    for i in range(0, parts):
+    halfparts = parts // 2
+    therange = sorted([i for i in range(0, parts)], key=lambda x: abs(x-halfparts))
+    for i in therange:
       na = Area.copy(ss.full_area)
       na.top = step * i + mya.top
       na.bottom = step * (i+1) + mya.top
       print(na)
-      ss.current_action.appendleft(move(Unit(None, 0, i*(2*step+3))))
+      print(str(i*(2*step+3)-mya.top+10) +  " == " + str(i*(2*step+3)))
+      ss.current_action.appendleft(move(Unit(None, 0, i*(2*step+4)-mya.top+10)))
       ss.current_action.appendleft(select_vehicles(na))
+
+
+  def act_it(desc: tuple, shift: float, waiter):
+    second_turn = deque([
+      select_vehicles(Area(shift, shift+desc[0].right-desc[0].left,
+                           desc[0].top, desc[0].bottom), vtype = desc[1]),
+      move(Unit(None, 0, 10+desc[0].bottom-2*desc[0].top)),
+    ])
+    if desc[1] == VehicleType.TANK:
+      second_turn += deque([at_move_end(pv, deque([do_shuffle]))])
+    return deque([
+      select_vehicles(desc[0], vtype = desc[1]),
+      move(Unit(None, shift-desc[0].left, 0)),
+      at_move_end(waiter, second_turn)
+    ])
 
   result = deque()
   grounds = [prepare(i) for i in [VehicleType.ARRV, VehicleType.IFV, VehicleType.TANK]]
@@ -363,9 +381,7 @@ def shuffle(s):
     shift += f[0].right - f[0].left + 5
   myv = vs.resolve(pv)
   mya = get_square(myv)
-  return result + deque([
-    at_move_end(pv, deque([do_shuffle]))
-  ])
+  return result
 
 def move_to_enemies(max_speed: float):
   def do_move(s: MyStrategy, w: World, m: Move):
@@ -384,6 +400,7 @@ class MyStrategy:
   current_action = deque()
   events = list()
   waiter = -1
+  nomoveturns = 0
   def init(self, me: Player, world: World, game: Game):
     self.full_area = Area(0.0,world.width,0.0,world.height)
     self.worldstate = WorldState(world)
@@ -402,12 +419,6 @@ class MyStrategy:
       self.init(me, world, game)
       self.current_action = shuffle(self)
     self.analyze(me, world, game)
-    to_remove = list()
-    for i in reversed(self.events):
-      if i(self, world):
-        to_remove.append(i)
-    for i in to_remove:
-      self.events.remove(i)
     if world.tick_index % 1000 == 0 and world.tick_index > 2000:
       self.current_action += [
         hurricane,
@@ -421,4 +432,11 @@ class MyStrategy:
         self.current_action.appendleft(act)
       if move.action != ActionType.NONE:
         self.actionsRemaining -= 1
+    elif self.actionsRemaining > 0:
+      to_remove = list()
+      for i in reversed(self.events):
+        if i(self, world):
+          to_remove.append(i)
+      for i in to_remove:
+        self.events.remove(i)
 
