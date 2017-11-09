@@ -306,8 +306,10 @@ def hurricane(s, w:World, m: Move):
   la.right = tl.x
   result = deque([
     select_vehicles(s.full_area),
-    rotate(-pi/8, epicenter),
+    rotate(-pi/2, epicenter),
     wait(30),
+    select_vehicles(s.full_area),
+    rotate(0, epicenter),
     select_vehicles(ta),
     move(Unit(None, eye_rad, 2*eye_rad)),
     select_vehicles(ba),
@@ -318,8 +320,10 @@ def hurricane(s, w:World, m: Move):
     move(Unit(None, eye_rad*2, -eye_rad)),
     wait(150),
     select_vehicles(s.full_area),
-    rotate(pi/4, epicenter),
+    rotate(pi/2, epicenter),
     wait(30),
+    select_vehicles(s.full_area),
+    rotate(0, epicenter),
     select_vehicles(cta),
     move(Unit(None, -eye_rad, 2*eye_rad)),
     select_vehicles(cba),
@@ -330,7 +334,10 @@ def hurricane(s, w:World, m: Move):
     move(Unit(None, eye_rad*2, eye_rad)),
     wait(150),
     select_vehicles(s.full_area),
-    rotate(-pi/4, epicenter),
+    rotate(-pi/2, epicenter),
+    wait(40),
+    select_vehicles(s.full_area),
+    rotate(0, epicenter),
   ])
   s.current_action = result + s.current_action
 
@@ -367,6 +374,8 @@ def shuffle(s):
       #hurricane,
       #hurricane,
       hurricane,
+      select_vehicles(ss.full_area),
+      group(1),
       fill_flag("formation_done"),
     ])
     third_turn = deque([
