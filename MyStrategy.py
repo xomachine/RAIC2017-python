@@ -244,6 +244,7 @@ def move(destination: Unit, max_speed: float = 0.0):
     m.action = ActionType.MOVE
     m.x = destination.x
     m.y = destination.y
+    print("Moving to: " + str(destination.x) + ":" + str(destination.y))
     m.max_speed = max_speed
   return do_move
 
@@ -449,9 +450,10 @@ def move_to_enemies(max_speed: float):
     value = 500
     for c in clusters:
       print("Cluster:" + str(len(c)))
-      cluster = map(lambda x: enemies[x], c)
-      new_value = map(lambda i: 1-int(i.type==0)-int(i.type==1)/2, cluster)
-      new_value = reduce(lambda x, y: x+y, new_value)
+      cluster = list(map(lambda x: enemies[x], c))
+      #new_value = map(lambda i: 1-int(i.type==0)-int(i.type==1)/2, cluster)
+      #new_value = reduce(lambda x, y: x+y, new_value)
+      new_value = len(cluster)
       print(str(value) + " == " + str(new_value))
       if value > new_value:
         print(str(value) + " > " + str(new_value))
