@@ -87,7 +87,8 @@ class Facilities(TaggedDict):
     self.opponent = world.get_opponent_player().id
     for i in world.facilities:
       (i.owner_player_id == self.me and self.allies or
-       i.owner_player_id == self.opponent or self.neutral).add(i.id)
+       i.owner_player_id == self.opponent and self.hostiles or
+       self.neutral).add(i.id)
       self.by_type[i.type].add(i.id)
 
   def update(self, world: World):
@@ -96,7 +97,8 @@ class Facilities(TaggedDict):
     self.neutral.clear()
     for i in world.facilities:
       (i.owner_player_id == self.me and self.allies or
-       i.owner_player_id == self.opponent or self.neutral).add(i.id)
+       i.owner_player_id == self.opponent and self.hostiles or
+       self.neutral).add(i.id)
 
 
 class WorldState:
