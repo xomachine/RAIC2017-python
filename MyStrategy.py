@@ -21,6 +21,9 @@ class Area:
     self.bottom = b
   def copy(a):
     return Area(a.left, a.right, a.top, a.bottom)
+  def is_inside(self, point):
+    return (point.x <= self.right and point.x >= self.left and
+            point.y >= self.top and point.y <= self.bottom)
   def area(self):
     width = (self.right - self.left)
     height = (self.bottom - self.top)
@@ -53,7 +56,7 @@ class Vehicles(TaggedDict):
   def in_area(self, a: Area):
     result = set()
     for k, v in self.items():
-      if v.x >= a.left and v.x <= a.right and v.y >= a.top and v.y <= a.bottom:
+      if a.is_inside(v):
         result.add(k)
     return result
 
