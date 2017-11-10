@@ -254,6 +254,14 @@ def group(gnum: int, action: range(4, 7) = ActionType.ASSIGN):
     m.group = gnum
   return do_group
 
+def scale(center: Unit, factor: float):
+  def do_scale(s: MyStrategy, w: World, m: Move):
+    m.action = ActionType.SCALE
+    m.factor = factor
+    m.x = center.x
+    m.y = center.y
+  return do_scale
+
 def select_vehicles(area: Area, vtype: VehicleType = None, group: int = 0,
                     action: range(1, 4) = ActionType.CLEAR_AND_SELECT):
   def do_select(s: MyStrategy, w: World, m: Move, a = area):
@@ -275,69 +283,27 @@ def hurricane(s, w:World, m: Move):
   print("Hurricane!")
   print(mya)
   epicenter = Unit(None, (mya.left + mya.right)/2, (mya.top + mya.bottom)/2)
-  eye_rad = 10
-  br = Unit(None, epicenter.x + eye_rad, epicenter.y + eye_rad)
-  tr = Unit(None, epicenter.x + eye_rad, epicenter.y - eye_rad)
-  bl = Unit(None, epicenter.x - eye_rad, epicenter.y + eye_rad)
-  tl = Unit(None, epicenter.x - eye_rad, epicenter.y - eye_rad)
-  cta = Area.copy(s.full_area)
-  cta.bottom = tl.y
-  cta.left = tl.x
-  cra = Area.copy(s.full_area)
-  cra.top = tr.y
-  cra.left = tr.x
-  cba = Area.copy(s.full_area)
-  cba.top = br.y
-  cba.right = br.x
-  cla = Area.copy(s.full_area)
-  cla.bottom = bl.y
-  cla.right = bl.x
-  ta = Area.copy(s.full_area)
-  ta.bottom = tr.y
-  ta.right = tr.x
-  ra = Area.copy(s.full_area)
-  ra.bottom = br.y
-  ra.left = br.x
-  ba = Area.copy(s.full_area)
-  ba.top = bl.y
-  ba.left = bl.x
-  la = Area.copy(s.full_area)
-  la.top = tl.y
-  la.right = tl.x
   result = deque([
+    select_vehicles(s.full_area),
+    scale(epicenter, 0.1),
+    wait(30),
     select_vehicles(s.full_area),
     rotate(-pi/2, epicenter),
     wait(30),
     select_vehicles(s.full_area),
-    rotate(0, epicenter),
-    select_vehicles(ta),
-    move(Unit(None, eye_rad, 2*eye_rad)),
-    select_vehicles(ba),
-    move(Unit(None, -eye_rad, -eye_rad*2)),
-    select_vehicles(ra),
-    move(Unit(None, -eye_rad*2, eye_rad)),
-    select_vehicles(la),
-    move(Unit(None, eye_rad*2, -eye_rad)),
+    scale(epicenter, 0.1),
     wait(150),
     select_vehicles(s.full_area),
     rotate(pi/2, epicenter),
     wait(30),
     select_vehicles(s.full_area),
-    rotate(0, epicenter),
-    select_vehicles(cta),
-    move(Unit(None, -eye_rad, 2*eye_rad)),
-    select_vehicles(cba),
-    move(Unit(None, eye_rad, -eye_rad*2)),
-    select_vehicles(cra),
-    move(Unit(None, -eye_rad*2, -eye_rad)),
-    select_vehicles(cla),
-    move(Unit(None, eye_rad*2, eye_rad)),
+    scale(epicenter, 0.1),
     wait(150),
     select_vehicles(s.full_area),
     rotate(-pi/2, epicenter),
     wait(40),
     select_vehicles(s.full_area),
-    rotate(0, epicenter),
+    scale(epicenter, 0.1),
   ])
   s.current_action = result + s.current_action
 
