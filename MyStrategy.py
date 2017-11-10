@@ -440,7 +440,8 @@ def shuffle(s):
   grounds = sorted(grounds, key=lambda x: x[0].left - 10*int(x[1] == VehicleType.TANK))
   flyers = map(prepare, ftypes)
   flyers = sorted(flyers, key=lambda x: x[0].left + x[0].top)
-  mya = get_square(vs.resolve(flyies | groundies))
+  mya = Area(18, 220, 18, 220)
+  #mya = get_square(vs.resolve(flyies | groundies))
   shift = mya.left+2
   gap = 12 # just a little gap between vehicles to prevent stucking at collisions
   for g in grounds:
