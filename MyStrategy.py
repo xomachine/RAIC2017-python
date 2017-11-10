@@ -307,6 +307,100 @@ def hurricane(s, w:World, m: Move):
   ])
   s.current_action = result + s.current_action
 
+def devide(unitset: set, each: callable, parts: int, name: str):
+  ## devide unitset to `parts` parts and do `each` with each part
+  ## each must be a callable that returns deque of actual actions and gets
+  ## a group number as argument. actions will be applied in order from
+  ## central part to edges
+  ## the last argument is an event name which will be fired
+  ## when devision is done. (at_flag)
+  halfparts = parts // 2
+  ordered = sorted(range(parts), key = lambda x: abs(x-halfparts))
+  tmpname = "devision:" + str(frozenset(unitset))
+  def do_devide(s: MyStrategy, w: World, m: Move):
+    vs = s.worldstate.vehicles
+    # to avoid non existing units we using intersection with
+    # all players units
+    pv = (vs.by_player[vs.me] & unitset)
+    units = vs.resolve(pv)
+    uarea = get_square(units)
+    step = (uarea.bottom - uarea.top) / parts
+    for i in ordered:
+      pa = Area.copy(s.full_area)
+      pa.top = step * i + uarea.top
+      pa.bottom = step * (i+1) + uarea.top
+      vehicles = vs.in_area(pa)
+      s.current_action.appendleft(
+        at_move_end(vehicles, deque([fill_flag(tmpname)])))
+      s.current_action = each(i, pa, uarea) + s.current_action
+    s.current_action.appendleft(at_flag(tmpname, parts,
+                                         deque([fill_flag(name)])))
+  return do_devide
+
+def do_shuffle(ss, w: World, m: Move):
+  vss = ss.worldstate.vehicles
+  pv = vss.by_player[vss.me]
+  myv = vss.resolve(pv)
+  mya = get_square(myv)
+  print("Area after alighment")
+  print(mya)
+  parts = 10
+  step = (mya.bottom - mya.top) / parts
+  central = Area.copy(ss.full_area)
+  fragment = (mya.right - mya.left)/3
+  central.left = mya.left + fragment
+  central.right = mya.left + 2*fragment
+  righter = Area.copy(ss.full_area)
+  righter.left = central.right+2
+  lefter = Area.copy(ss.full_area)
+  lefter.right = central.left
+  fourth_turn = deque([
+    #select_vehicles(ss.full_area),
+    #rotate(-pi/2, Unit(None, central.right + fragment/2, mya.top + fragment*2))
+    #hurricane,
+    #hurricane,
+    hurricane,
+    select_vehicles(ss.full_area),
+    group(1),
+    fill_flag("formation_done"),
+  ])
+  third_turn = deque([
+    select_vehicles(lefter),
+    move(Unit(None, central.left - lefter.left, 0)),
+    select_vehicles(righter),
+    move(Unit(None, central.left - righter.left, 0)),
+    wait(50),
+    at_move_end(pv, fourth_turn)
+  ])
+  second_turn = deque([
+    select_vehicles(ss.full_area, vtype = VehicleType.FIGHTER),
+    move(Unit(None, 0, step+1)),
+    select_vehicles(ss.full_area, vtype = VehicleType.ARRV),
+    move(Unit(None, 0, step+1)),
+    select_vehicles(ss.full_area, vtype = VehicleType.IFV),
+    move(Unit(None, 0, 2*step+3)),
+    wait(50),
+    at_move_end(pv, third_turn)
+    ])
+  def each(i, a, f):
+    step = a.bottom - a.top
+    center = (f.bottom + f.top)/2
+    distributed_size = parts*(3*step+4)
+    top_from_bottom = ss.full_area.bottom - distributed_size
+    top_from_center = center - distributed_size/2
+    top = (top_from_center < 0 and f.top + 10 or
+           top_from_bottom < top_from_center and top_from_bottom or
+           top_from_center)
+    target = Unit(None, 0, i*(2*step+4)-top)
+    return deque([
+      select_vehicles(a),
+      move(target),
+      ])
+  ss.current_action.appendleft(devide(pv, each, parts, "loosed"))
+  ss.current_action.appendleft(at_flag("loosed", 1, second_turn))
+
+
+
 def shuffle(s):
   vs = s.worldstate.vehicles
   pv = vs.by_player[vs.me]
@@ -317,64 +411,6 @@ def shuffle(s):
     vehicles = vs.resolve(vv)
     varea = get_square(vehicles)
     return (varea, t, vv)
-
-  def do_shuffle(ss: MyStrategy, w: World, m: Move):
-    vss = ss.worldstate.vehicles
-    myv = vss.resolve(pv)
-    mya = get_square(myv)
-    print("Area after alighment")
-    print(mya)
-    parts = 10
-    step = (mya.bottom - mya.top) / parts
-    central = Area.copy(ss.full_area)
-    fragment = (mya.right - mya.left)/3
-    central.left = mya.left + fragment
-    central.right = mya.left + 2*fragment
-    righter = Area.copy(ss.full_area)
-    righter.left = central.right+2
-    lefter = Area.copy(ss.full_area)
-    lefter.right = central.left
-    fourth_turn = deque([
-      #select_vehicles(ss.full_area),
-      #rotate(-pi/2, Unit(None, central.right + fragment/2, mya.top + fragment*2))
-      #hurricane,
-      #hurricane,
-      hurricane,
-      select_vehicles(ss.full_area),
-      group(1),
-      fill_flag("formation_done"),
-    ])
-    third_turn = deque([
-      select_vehicles(lefter),
-      move(Unit(None, central.left - lefter.left, 0)),
-      select_vehicles(righter),
-      move(Unit(None, central.left - righter.left, 0)),
-      wait(50),
-      at_move_end(pv, fourth_turn)
-    ])
-    second_turn = deque([
-      select_vehicles(ss.full_area, vtype = VehicleType.FIGHTER),
-      move(Unit(None, 0, step+1)),
-      select_vehicles(ss.full_area, vtype = VehicleType.ARRV),
-      move(Unit(None, 0, step+1)),
-      select_vehicles(ss.full_area, vtype = VehicleType.IFV),
-      move(Unit(None, 0, 2*step+3)),
-      wait(50),
-      at_move_end(pv, third_turn)
-      ])
-    halfparts = parts // 2
-    therange = sorted(range(parts), key=lambda x: abs(x-halfparts))
-    for i in therange:
-      na = Area.copy(ss.full_area)
-      na.top = step * i + mya.top
-      na.bottom = step * (i+1) + mya.top
-      vehicles = vss.in_area(na)
-      print(na)
-      print("Selected = " + str(len(vehicles)))
-      ss.current_action.appendleft(at_move_end(vehicles, deque([fill_flag("loosed")])))
-      ss.current_action.appendleft(move(Unit(None, 0, i*(2*step+4)-mya.top+10)))
-      ss.current_action.appendleft(select_vehicles(na))
-    ss.current_action.appendleft(at_flag("loosed", parts, second_turn))
 
 
   def act_it(desc: tuple, shift: float, waiter):
