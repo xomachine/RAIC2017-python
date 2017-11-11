@@ -476,23 +476,32 @@ def do_shuffle(ss, w: World, m: Move):
   parts = 10
   step = (mya.bottom - mya.top) / parts
   central = Area.copy(ss.full_area)
-  fragment = (mya.right - mya.left)/3
-  central.left = mya.left + fragment
-  central.right = mya.left + 2*fragment
+  fragment_area = get_square(vss.resolve(pv & vss.by_type[VehicleType.IFV]))
+  fragment = fragment_area.right - fragment_area.left
+  central.left = (mya.left + mya.right - fragment)/2
+  central.right = central.left + fragment
   righter = Area.copy(ss.full_area)
-  righter.left = central.right+2
+  righter.right = mya.right
+  righter.left = mya.right - fragment
   lefter = Area.copy(ss.full_area)
-  lefter.right = central.left
-  fourth_turn = deque([
+  lefter.left = mya.left
+  lefter.right = mya.left + fragment
+  #fourth_turn = deque([
     #select_vehicles(ss.full_area),
     #rotate(-pi/2, Unit(None, central.right + fragment/2, mya.top + fragment*2))
-    #hurricane,
-    #hurricane,
-    hurricane,
-    select_vehicles(ss.full_area),
-    group(1),
-    fill_flag("formation_done"),
-  ])
+  def halfrotate(i, a, f):
+    if i == 0:
+      return deque()
+    else:
+      rcenter = f.get_center()
+      rcenter.x = f.left
+      return deque([select_vehicles(a), rotate(pi, rcenter)])
+  fifth_turn = deque([
+    at_flag("rerotated", 1, deque([fill_flag("formation_done")])),
+    devide(vss.by_group[1], halfrotate, 2, "rerotated")
+   ])
+  fourth_turn = (do_and_check(tight(pv), "tighted", pv) +
+    deque([at_flag("tighted", 1, fifth_turn)]))
   third_turn = deque([
     select_vehicles(lefter),
     move(Unit(None, central.left - lefter.left, 0)),
