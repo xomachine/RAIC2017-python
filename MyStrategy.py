@@ -667,12 +667,12 @@ class MyStrategy:
       self.current_action += shuffle(self)
     self.analyze(me, world, game)
     if len(self.current_action) > 0 and self.actionsRemaining > 0 and self.waiter < world.tick_index:
-      act = self.current_action.popleft()
-      print(act)
-      if act(self, world, move):
-        self.current_action.appendleft(act)
-      if move.action != ActionType.NONE:
-        self.actionsRemaining -= 1
+      while len(self.current_action) > 0:
+        act = self.current_action.popleft()
+        act(self, world, move)
+        if move.action != ActionType.NONE:
+          self.actionsRemaining -= 1
+          break
     elif self.actionsRemaining > 0:
       to_remove = list()
       for i in reversed(self.events):
