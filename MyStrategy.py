@@ -188,7 +188,8 @@ def at_move_end(watchers: set, actions: deque):
     intersect = s.worldstate.vehicles.updated & watchers
     if (not (name in s.flags)) or s.flags[name] >= 2:
       print("Move ended for " + name)
-      s.flags.pop(name)
+      if name in s.flags:
+        s.flags.pop(name)
       s.current_action = actions + s.current_action
       return True
     if len(intersect) == 0:
@@ -349,7 +350,7 @@ def devide(unitset: set, each: callable, parts: int, name: str):
   ## when devision is done. (at_flag)
   halfparts = parts // 2
   ordered = sorted(range(parts), key = lambda x: abs(x-halfparts))
-  tmpname = "devision:" + str(frozenset(unitset))
+  tmpname = "devision:" + str(hash(frozenset(unitset)))
   def do_devide(s: MyStrategy, w: World, m: Move):
     vs = s.worldstate.vehicles
     # to avoid non existing units we using intersection with
@@ -384,8 +385,8 @@ def do_and_check(action, flag: str, group: set):
   ## Returns a sequence of actions to perform an action and check the flag
   ## after its end (the action end equals groups quiting moving)
   result = []
-  if action is callable:
-    result = [action]
+  if callable(action):
+    result = deque([action])
   else:
     result = deque(action)
   return result + deque([
@@ -393,33 +394,55 @@ def do_and_check(action, flag: str, group: set):
     at_move_end(group, deque([fill_flag(flag)]))
   ])
 
+def tight(group: set):
+  ## Tights the group
+  name = "devided:" + str(hash(frozenset(group)))
+  def do_tight(s: MyStrategy, w: World, m: Move):
+    vs = s.worldstate.vehicles
+    pv = vs.by_player[vs.me]
+    actualgroup = group & pv
+    def each(i, partarea, fullarea):
+      target = Unit(None, 0, (1 - 2 * i) * 1000)
+      center = fullarea.get_center()
+      return deque([
+        #select_vehicles(partarea),
+        #move(target),
+        #wait(50),
+        select_vehicles(partarea),
+        scale(center, 0.1),
+      ])
+    s.current_action.appendleft(devide(actualgroup, each, 2, name))
+  return do_tight
+
 def initial_shuffle():
   ## Shuffles initially spawned groups of units into one
   ## Units should be initially set in one line
   ## Returns a closure to place into MyStrategy.current_action
-  name = "initialshuffle"
+  tightflag = "tighted"
   def do_shuffle(s: MyStrategy, w: World, m: Move):
     vs = s.worldstate.vehicles
     classes = [reduce(lambda x,y: y | x, list(map(lambda x: vs.by_type[x], i)))
                for i in types]
-    pv = s.by_player[vs.me]
+    pv = vs.by_player[vs.me]
     allunits = vs.resolve(pv)
-    fullarea = get_square(actualunits)
+    fullarea = get_square(allunits)
     pointofscale = Unit(None, fullarea.left, fullarea.top)
+    result = deque()
     for clas in range(len(classes)):
       units = vs.resolve(classes[clas] & pv)
       area = get_square(units)
       pointofscale = Unit(None, area.left, area.top)
       spreadflag = "spread:" + str(clas)
       shiftflag = "shifted:" + str(clas)
-      mergeflag = "shifted:" + str(clas)
-      result += select_types(types[clas], s.full_area)
-      result += do_and_check(scale(pointofscale, len(types[clas])),
-                             spreadflag, classes[clas])
+      mergeflag = "merged:" + str(clas)
+      spread_groups = select_types(types[clas], s.full_area)
+      spread_groups += do_and_check(scale(pointofscale, len(types[clas])),
+                                    spreadflag, classes[clas])
       shift_groups = deque()
       merge_groups = deque()
+      slowpockarea = get_square(vs.resolve(vs.by_type[types[clas][0]]))
       for i in range(1, len(types[clas])):
-        shift = 4 * i # 4 - vehicle diameter
+        shift = 4 * i/len(types[clas]) # 4 - vehicle diameter
         thetype = types[clas][i]
         destination = Unit(None, 0, shift)
         group_of_interest = vs.by_type[thetype] & pv
@@ -427,17 +450,18 @@ def initial_shuffle():
         shift_groups += deque([select_vehicles(s.full_area, vtype=thetype)])
         shift_groups += do_and_check(move(destination), shiftflag,
                                      group_of_interest)
-        aligned_destination = Unit(None, area.left - goi_area.left, 0)
+        aligned_destination = Unit(None, slowpockarea.left - goi_area.left, 0)
         merge_groups += deque([select_vehicles(s.full_area, vtype = thetype)])
         merge_groups += do_and_check(move(aligned_destination), mergeflag, group_of_interest)
       tight_groups = select_types(types[clas], s.full_area)
       tight_groups += do_and_check(scale(pointofscale, 0.1), tightflag,
                                    classes[clas])
-      result += deque([at_flag(spreadflag, 1, shift_groups)])
-      result += deque([at_flag(shiftflag, 1, merge_groups)])
+      result += shift_groups
+      result += deque([at_flag(spreadflag, 1, merge_groups)])
+      result += deque([at_flag(shiftflag, 1, spread_groups)])
       result += deque([at_flag(mergeflag, 1, tight_groups)])
       result += deque([at_flag(tightflag, 2, deque([fill_flag("shuffled")]))])
-
+    s.current_action = result + s.current_action
   return do_shuffle
 
 def do_shuffle(ss, w: World, m: Move):
