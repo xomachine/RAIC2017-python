@@ -309,37 +309,39 @@ def select_vehicles(area: Area, vtype: VehicleType = None, group: int = 0,
     m.vehicle_type = vtype
   return do_select
 
-def hurricane(s, w:World, m: Move):
-  vs = s.worldstate.vehicles
-  pv = vs.by_player[vs.me]
-  myv = vs.resolve(pv)
-  mya = get_square(myv)
-  print("Hurricane!")
-  print(mya)
-  epicenter = Unit(None, (mya.left + mya.right)/2, (mya.top + mya.bottom)/2)
-  result = deque([
-    select_vehicles(s.full_area),
-    scale(epicenter, 0.1),
-    wait(30),
-    select_vehicles(s.full_area),
-    rotate(-pi/2, epicenter),
-    wait(30),
-    select_vehicles(s.full_area),
-    scale(epicenter, 0.1),
-    wait(150),
-    select_vehicles(s.full_area),
-    rotate(pi/2, epicenter),
-    wait(30),
-    select_vehicles(s.full_area),
-    scale(epicenter, 0.1),
-    wait(150),
-    select_vehicles(s.full_area),
-    rotate(-pi/2, epicenter),
-    wait(40),
-    select_vehicles(s.full_area),
-    scale(epicenter, 0.1),
-  ])
-  s.current_action = result + s.current_action
+def hurricane(group: int):
+  def do_hurricane(s, w:World, m: Move):
+    vs = s.worldstate.vehicles
+    pv = vs.by_group[group]
+    myv = vs.resolve(pv)
+    mya = get_square(myv)
+    print("Hurricane!")
+    print(mya)
+    epicenter = mya.get_center()
+    result = deque([
+      select_vehicles(s.full_area, group = group),
+      scale(epicenter, 0.1),
+      wait(30),
+      select_vehicles(s.full_area, group = group),
+      rotate(pi/2, epicenter),
+      wait(30),
+      select_vehicles(s.full_area, group = group),
+      scale(epicenter, 0.1),
+      wait(150),
+      select_vehicles(s.full_area, group = group),
+      rotate(-pi/4, epicenter),
+      wait(30),
+      select_vehicles(s.full_area, group = group),
+      scale(epicenter, 0.1),
+      wait(150),
+      select_vehicles(s.full_area, group = group),
+      rotate(pi/8, epicenter),
+      wait(40),
+      select_vehicles(s.full_area, group = group),
+      scale(epicenter, 0.1),
+    ])
+    s.current_action = result + s.current_action
+  return do_hurricane
 
 def devide(unitset: set, each: callable, parts: int, name: str):
   ## devide unitset to `parts` parts and do `each` with each part
@@ -637,50 +639,71 @@ def shuffle(s):
   return (deque([at_flag("compacted", 1, deque([do_shuffle]))]) +
           initial_compact(s))
 
-def move_to_enemies(max_speed: float):
-  def do_move(s: MyStrategy, w: World, m: Move):
+def move_to_enemies(group: int, max_speed: float):
+  valdst = 1 # amount over distance factor
+  def do_move(s: MyStrategy, w: World, m: Move, max_speed = max_speed):
     vs = s.worldstate.vehicles
+    myg = vs.by_group[group]
+    my = vs.resolve(myg)
+    marea = get_square(my)
+    mycenter = marea.get_center()
     enemies = list(vs.resolve(vs.by_player[vs.opponent]))
     clusters = clusterize(enemies)
-    least = enemies
+    least = get_square(enemies)
     value = 500
+    mindistance = 2000
     for c in clusters:
       print("Cluster:" + str(len(c)))
       cluster = list(map(lambda x: enemies[x], c))
+      carea = get_square(cluster)
+      clustercenter = carea.get_center()
+      distance = mycenter.get_distance_to_unit(clustercenter)
       #new_value = map(lambda i: 1-int(i.type==0)-int(i.type==1)/2, cluster)
       #new_value = reduce(lambda x, y: x+y, new_value)
       new_value = len(cluster)
-      print(str(value) + " == " + str(new_value))
-      if value > new_value:
-        print(str(value) + " > " + str(new_value))
-        least = cluster
+      criticaldistance = (new_value + len(myg))/4 # should be obtained empirically
+      #print(str(value) + " == " + str(new_value))
+      if distance < criticaldistance:
+        # combat mode! fight or flee!
+        if len(myg - vs.damaged) > len(set(cluster) - vs.damaged):
+          #fight!
+          print("Fight!")
+          least = Unit(None, (clustercenter.x+mycenter.x)/2,
+                       (clustercenter.y+mycenter.y)/2)
+          max_speed = max_speed / 2
+        else:
+          print("Flee!")
+          least = Unit(None, 2*mycenter.x-clustercenter.x, 2*mycenter.y-clustercenter.y)
+          #flee!
+        break
+      if value * valdst + mindistance > new_value * valdst + distance:
+        #print(str(value) + " > " + str(new_value))
+        least = clustercenter
         value = new_value
-    earea = get_square(least)
-    my = vs.resolve(vs.by_player[vs.me])
-    marea = get_square(my)
-    dx = (earea.left+earea.right)/2 - (marea.left+marea.right)/2
-    dy = (earea.top+earea.bottom)/2 - (marea.top+marea.bottom)/2
+        mindistance = distance
+    dx = least.x - mycenter.x
+    dy = least.y - mycenter.y
     destination = Unit(None, dx, dy)
     s.current_action.appendleft(move(destination, max_speed = max_speed))
   return do_move
 
-def hunt(game: Game):
+def hunt(group: int, game: Game):
   def do_hunt(s: MyStrategy, w: World, m: Move):
     vs = s.worldstate.vehicles
-    myv = list(vs.resolve(vs.by_player[vs.me]))
+    myv = list(vs.resolve(vs.by_group[group]))
     mya = get_square(myv)
     density = len(myv)/mya.area()
     print("Density is: " + str(density))
     print("Area is: " + str(mya))
     print("Amount is: " + str(len(myv)))
     if density < criticaldensity:
-      s.current_action += deque([hurricane, hunt(game)])
+      s.current_action += deque([hurricane(group), hunt(group, game)])
     else:
       huntchain = deque([
         select_vehicles(s.full_area),
-        move_to_enemies(game.tank_speed * game.swamp_terrain_speed_factor),
-        wait(300),
-        hunt(game)
+        move_to_enemies(group, game.tank_speed * game.swamp_terrain_speed_factor),
+        wait(100),
+        hunt(group, game)
       ])
       s.current_action += huntchain
   return do_hunt
@@ -709,7 +732,11 @@ class MyStrategy:
     if world.tick_index == 0:
       self.init(me, world, game)
       self.current_action += deque([
-        at_flag("formation_done", 1, deque([hunt(game)]))
+        select_vehicles(self.full_area),
+        group(1),
+        at_flag("formation_done", 1, deque([
+            hunt(1, game)
+          ]))
         ])
       self.current_action += shuffle(self)
     self.analyze(me, world, game)
