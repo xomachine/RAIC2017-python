@@ -539,7 +539,7 @@ def initial_compact(s):
       squadsfromset[i] = len(unitsfromset[i])//100
       if squadsfromset[i] > 0:
         empties.discard(i)
-    print("Column " + str(i) + " has " + str(squadsfromset) + " squads")
+    print("Type " + str(t) + " has " + str(squadsfromset) + " squads by columns")
     print(empties)
     for i, col in enumerate(columns):
       if squadsfromset[i] > 0:
@@ -553,15 +553,18 @@ def initial_compact(s):
           if t == GROUNDERS and i != 1:
             sample = vs[movecandidateset.pop()]
             obstacle = set()
+            print("Checking for obstacles...")
             for lno, line in enumerate(lines):
               if line.is_inside(sample):
+                print("... at line " + str(lno))
                 obstacle = (vs.in_area(line) & vs.in_area(columns[1]) &
-                            unitsfromset[i])
+                            sets[t])
                 break
             if len(obstacle) > 0:
               print("Obstacle detected")
               obstacletype = vs[obstacle.pop()].type
               if obstacletype == VehicleType.TANK:
+                print("It is tank, lets find something else to move")
                 continue
               else:
                 tcol = empties.pop()
