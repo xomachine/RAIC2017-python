@@ -24,6 +24,8 @@ class Area:
     self.top = t
     self.right = r
     self.bottom = b
+  def get_center(self):
+    return Unit(None, (self.left + self.right)/2, (self.top + self.bottom)/2)
   def copy(a):
     return Area(a.left, a.right, a.top, a.bottom)
   def is_inside(self, point):
