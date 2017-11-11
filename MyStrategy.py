@@ -341,9 +341,8 @@ def devide(unitset: set, each: callable, parts: int, name: str):
       pa.top = step * i + uarea.top
       pa.bottom = step * (i+1) + uarea.top
       vehicles = vs.in_area(pa)
-      s.current_action.appendleft(
-        at_move_end(vehicles, deque([fill_flag(tmpname)])))
-      s.current_action = each(i, pa, uarea) + s.current_action
+      s.current_action = (do_and_check(each(i, pa, uarea), tmpname, vehicles)
+                          + s.current_action)
     s.current_action.appendleft(at_flag(tmpname, parts,
                                          deque([fill_flag(name)])))
   return do_devide
@@ -451,7 +450,7 @@ def do_shuffle(ss, w: World, m: Move):
     move(Unit(None, central.left - lefter.left, 0)),
     select_vehicles(righter),
     move(Unit(None, central.left - righter.left, 0)),
-    wait(50),
+    wait(10),
     at_move_end(pv, fourth_turn)
   ])
   second_turn = deque([
@@ -461,7 +460,7 @@ def do_shuffle(ss, w: World, m: Move):
     move(Unit(None, 0, step+1)),
     select_vehicles(ss.full_area, vtype = VehicleType.IFV),
     move(Unit(None, 0, 2*step+3)),
-    wait(50),
+    wait(10),
     at_move_end(pv, third_turn)
     ])
   def each(i, a, f):
@@ -524,12 +523,8 @@ def initial_compact(s):
       for tt in types[clas]:
         squadtomove = vs.in_area(line) & vs.by_type[tt]
         if len(squadtomove) > 0:
-          secondturn += deque([
-            select_vehicles(s.full_area, vtype = tt),
-            move(target),
-            wait(5),
-            at_move_end(squadtomove, deque([fill_flag(name)]))
-          ])
+          secondturn += do_and_check([select_vehicles(s.full_area, vtype = tt),
+                                      move(target)], name, squadtomove)
           counted += 1
     return (deque([at_flag(name, counted, deque([fill_flag(namefull)]))]) +
             secondturn)
@@ -573,22 +568,16 @@ def initial_compact(s):
                 empties.add(1)
                 target = Unit(None, columns[tcol].left - columns[1].left, 0)
                 print("Move obstacle from 1 to " + str(tcol))
-                result += deque([
+                result += do_and_check([
                   select_vehicles(s.full_area, vtype = obstacletype),
-                  move(target),
-                  wait(5),
-                  at_move_end(unitsfromset[i], deque([fill_flag(name)]))
-                  ])
+                  move(target)], name, unitsfromset[i])
                 registredflags += 1
           tcol = empties.pop()
           target = Unit(None, columns[tcol].left - columns[i].left, 0)
           print("Move from " + str(i) + " to " + str(tcol))
-          result += deque([
+          result += do_and_check([
             select_vehicles(s.full_area, vtype = tomovetype),
-            move(target),
-            wait(5),
-            at_move_end(unitsfromset[i], deque([fill_flag(name)]))
-            ])
+            move(target)], name, unitsfromset[i])
           registredflags += 1
           squadsfromset[i] -= 1
     result = deque([at_flag("firstturn:"+str(t), registredflags,
