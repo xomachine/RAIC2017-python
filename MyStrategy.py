@@ -153,26 +153,27 @@ def at_flag(name: str, count: int, actions: deque):
   def do_add_event(s: MyStrategy, w: World, m:Move):
     if not (name in s.flags):
       s.flags[name] = 0
+    print("Waiting " + str(count) + " on flag: " + name)
     s.events.append(event)
   return do_add_event
 
 def at_move_end(watchers: set, actions: deque):
   name = "move_end:" + str(hash(frozenset(watchers)))
-  print(name)
   def do_eventme(s: MyStrategy, w: World):
     intersect = s.worldstate.vehicles.updated & watchers
+    if (not (name in s.flags)) or s.flags[name] >= 2:
+      print("Move ended for " + name)
+      s.flags.pop(name)
+      s.current_action = actions + s.current_action
+      return True
     if len(intersect) == 0:
       s.flags[name] += 1
     else:
       s.flags[name] = 0
-    if s.flags[name] >= 2:
-      s.flags.pop(name)
-      s.current_action = actions + s.current_action
-      return True
-    else:
-      return False
+    return False
   def do_waitme(s: MyStrategy, w: World, m:Move):
     s.events.append(do_eventme)
+    print("Waiting move end for set:" + name)
     s.flags[name] = 0
   return do_waitme
 
@@ -402,59 +403,128 @@ def do_shuffle(ss, w: World, m: Move):
   ss.current_action.appendleft(devide(pv, each, parts, "loosed"))
   ss.current_action.appendleft(at_flag("loosed", 1, second_turn))
 
-
-
-def shuffle(s):
+def initial_compact(s):
+  ## Compactifies the initial spawn into one line
+  ## At the end of process will set the "compacted" flag
+  ## Returns deque with actions. s - MyStrategy
+  result = deque()
   vs = s.worldstate.vehicles
   pv = vs.by_player[vs.me]
-  groundies = (vs.by_type[VehicleType.TANK] | vs.by_type[VehicleType.IFV] | vs.by_type[VehicleType.ARRV]) & pv
-  flyies = (vs.by_type[VehicleType.FIGHTER] | vs.by_type[VehicleType.HELICOPTER]) & pv
-  def prepare(t: VehicleType):
-    vv = pv & vs.by_type[t]
-    vehicles = vs.resolve(vv)
-    varea = get_square(vehicles)
-    return (varea, t, vv)
+  # hardcoded, no way to obtain dynamicaly
+  spawnarea = Area(18, 220, 18, 220)
+  squadarea = get_square(vs.resolve(vs.by_type[VehicleType.IFV] & pv))
+  spawnarea_width = (spawnarea.right - spawnarea.left)
+  colwidth = squadarea.right - squadarea.left
+  centralleft = spawnarea.left + (spawnarea_width - colwidth) / 2
+  centralright = centralleft + colwidth
+  linewidth = squadarea.bottom - squadarea.top
+  lines = [
+    Area(spawnarea.left, spawnarea.right, spawnarea.top,
+         spawnarea.top + linewidth),
+    Area(spawnarea.left, spawnarea.right, centralleft, centralright),
+    Area(spawnarea.left, spawnarea.right, spawnarea.bottom - linewidth,
+         spawnarea.bottom),
+  ]
+  columns = [
+    Area(spawnarea.left, spawnarea.left + colwidth, spawnarea.top,
+         spawnarea.bottom),
+    Area(centralleft, centralright, spawnarea.top, spawnarea.bottom),
+    Area(spawnarea.right - colwidth, spawnarea.right, spawnarea.top,
+         spawnarea.bottom),
+  ]
+  FLYERS = 0
+  GROUNDERS = 1
+  movables = [VehicleType.IFV, VehicleType.ARRV, VehicleType.FIGHTER]
+  types = [[VehicleType.HELICOPTER, VehicleType.FIGHTER],
+           [VehicleType.TANK, VehicleType.IFV, VehicleType.ARRV]]
+  sets = [reduce(lambda x, y: y | x, list(map(lambda x: vs.by_type[x], i)))
+          for i in types]
+  namefull = "secondturn"
+  def adjust(clas):
+    ## Perform a vertical move
+    secondturn = deque()
+    name = namefull + ":" + str(clas)
+    counted = 0
+    for i in [0, 2]: # lines except central
+      line = lines[i]
+      target = Unit(None, 0, lines[1].top - line.top)
+      for tt in types[clas]:
+        squadtomove = vs.in_area(line) & vs.by_type[tt]
+        if len(squadtomove) > 0:
+          secondturn += deque([
+            select_vehicles(s.full_area, vtype = tt),
+            move(target),
+            wait(5),
+            at_move_end(squadtomove, deque([fill_flag(name)]))
+          ])
+          counted += 1
+    return (deque([at_flag(name, counted, deque([fill_flag(namefull)]))]) +
+            secondturn)
+  for t in [FLYERS, GROUNDERS]:
+    empties = set(range(3))
+    registredflags = 0
+    unitsfromset = [None]*len(columns)
+    squadsfromset = [None]*len(columns)
+    for i, col in enumerate(columns):
+      colunits = vs.in_area(col)
+      unitsfromset[i] = colunits & sets[t]
+      squadsfromset[i] = len(unitsfromset[i])//100
+      if squadsfromset[i] > 0:
+        empties.discard(i)
+    print("Column " + str(i) + " has " + str(squadsfromset) + " squads")
+    print(empties)
+    for i, col in enumerate(columns):
+      if squadsfromset[i] > 0:
+        name = "firstturn:" + str(t)
+        for tomovetype in movables:
+          if squadsfromset[i] <= 1:
+            break
+          movecandidateset = (unitsfromset[i] & vs.by_type[tomovetype])
+          if len(movecandidateset) == 0:
+            continue
+          if t == GROUNDERS and i != 1:
+            sample = vs[movecandidateset.pop()]
+            obstacle = set()
+            for lno, line in enumerate(lines):
+              if line.is_inside(sample):
+                obstacle = (vs.in_area(line) & vs.in_area(columns[1]) &
+                            unitsfromset[i])
+                break
+            if len(obstacle) > 0:
+              print("Obstacle detected")
+              obstacletype = vs[obstacle.pop()].type
+              if obstacletype == VehicleType.TANK:
+                continue
+              else:
+                tcol = empties.pop()
+                empties.add(1)
+                target = Unit(None, columns[tcol].left - columns[1].left, 0)
+                print("Move obstacle from 1 to " + str(tcol))
+                result += deque([
+                  select_vehicles(s.full_area, vtype = obstacletype),
+                  move(target),
+                  wait(5),
+                  at_move_end(unitsfromset[i], deque([fill_flag(name)]))
+                  ])
+                registredflags += 1
+          tcol = empties.pop()
+          target = Unit(None, columns[tcol].left - columns[i].left, 0)
+          print("Move from " + str(i) + " to " + str(tcol))
+          result += deque([
+            select_vehicles(s.full_area, vtype = tomovetype),
+            move(target),
+            wait(5),
+            at_move_end(unitsfromset[i], deque([fill_flag(name)]))
+            ])
+          registredflags += 1
+          squadsfromset[i] -= 1
+    result = deque([at_flag("firstturn:"+str(t), registredflags,
+                            adjust(t))]) + result
+  return deque([at_flag(namefull, 2, deque([fill_flag("compacted")]))]) + result
 
-
-  def act_it(desc: tuple, shift: float, waiter):
-    ## enqueues actions to compactify the troops
-    name = "first_maneur" + str(hash(frozenset(waiter)))
-    second_turn = deque([
-      select_vehicles(Area(shift, shift+desc[0].right-desc[0].left,
-                           desc[0].top, desc[0].bottom), vtype = desc[1]),
-      move(Unit(None, 0, 10+desc[0].bottom-2*desc[0].top)),
-      at_move_end(desc[2], deque([fill_flag("compact")])),
-    ])
-    return deque([
-      # horizontal adjust
-      select_vehicles(desc[0], vtype = desc[1]),
-      move(Unit(None, shift-desc[0].left, 0)),
-      at_flag(name, len(waiter), second_turn),
-      at_move_end(desc[2], deque([fill_flag(name)]))
-    ])
-
-  result = deque()
-  gtypes = [VehicleType.ARRV, VehicleType.IFV, VehicleType.TANK]
-  ftypes = [VehicleType.FIGHTER, VehicleType.HELICOPTER]
-  grounds = map(prepare, gtypes)
-  grounds = sorted(grounds, key=lambda x: x[0].left - 10*int(x[1] == VehicleType.TANK))
-  flyers = map(prepare, ftypes)
-  flyers = sorted(flyers, key=lambda x: x[0].left + x[0].top)
-  mya = Area(18, 220, 18, 220)
-  #mya = get_square(vs.resolve(flyies | groundies))
-  shift = mya.left+2
-  gap = 12 # just a little gap between vehicles to prevent stucking at collisions
-  for g in grounds:
-    result += act_it(g, shift, gtypes)
-    shift += g[0].right - g[0].left + gap
-  shift = mya.left+2
-  for f in flyers:
-    result += act_it(f, shift, ftypes)
-    shift += f[0].right - f[0].left + gap
-  myv = vs.resolve(pv)
-  mya = get_square(myv)
-  # 5 - is amount of vehicle types
-  return result + deque([at_flag("compact", 5, deque([do_shuffle]))])
+def shuffle(s):
+  return (deque([at_flag("compacted", 1, deque([do_shuffle]))]) +
+          initial_compact(s))
 
 def move_to_enemies(max_speed: float):
   def do_move(s: MyStrategy, w: World, m: Move):
