@@ -53,7 +53,9 @@ class Vehicles(TaggedDict):
     self.opponent = world.get_opponent_player().id
     self.by_player = dict()
     self.by_type = dict()
+    self.by_group = dict()
     self.updated = set()
+    self.damaged = set()
     TaggedDict.__init__(self, world.new_vehicles)
     for i in world.new_vehicles:
       self.by_player.setdefault(i.player_id, set()).add(i.id)
@@ -78,12 +80,26 @@ class Vehicles(TaggedDict):
       if self[i.id].x != i.x or self[i.id].y != i.y:
         self.updated.add(i.id)
       self[i.id].update(i)
+      health = i.durability / self[i.id].max_durability
+      if i.id in self.by_player[self.me]:
+        newgroups = set(i.groups)
+        fullgroups = set(self.by_group)
+        for g in i.groups:
+          self.by_group.setdefault(g, set()).add(i.id)
+        for g in fullgroups - newgroups:
+          self.by_group.setdefault(g, set()).discard(i.id)
       if i.durability == 0:
         self.pop(i.id, None)
         for s in self.by_player.values():
           s.discard(i.id)
         for s in self.by_type.values():
           s.discard(i.id)
+        for s in self.by_group.values():
+          s.discard(i.id)
+      elif health < 0.6:
+        self.damaged.add(i.id)
+      elif health > 0.99:
+        self.damaged.discard(i.id)
 
 
 class Facilities(TaggedDict):
@@ -265,6 +281,10 @@ def group(gnum: int, action: range(4, 7) = ActionType.ASSIGN):
   def do_group(s: MyStrategy, w: World, m: Move):
     m.action = action
     m.group = gnum
+    if action == ActionType.ASSIGN:
+      s.free_groups.discard(gnum)
+    elif action == ActionType.DISBAND:
+      s.free_groups.add(gnum)
   return do_group
 
 def scale(center: Unit, factor: float):
@@ -467,7 +487,7 @@ def do_shuffle(ss, w: World, m: Move):
     ])
   def each(i, a, f):
     step = a.bottom - a.top
-    center = (f.bottom + f.top)/2
+    center = f.get_center().y
     distributed_size = parts*(3*step+4)
     top_from_bottom = ss.full_area.bottom - distributed_size
     top_from_center = center - distributed_size/2
@@ -649,6 +669,7 @@ class MyStrategy:
   nomoveturns = 0
   def init(self, me: Player, world: World, game: Game):
     self.full_area = Area(0.0,world.width,0.0,world.height)
+    self.free_groups = set(range(game.max_unit_group+1))
     self.worldstate = WorldState(world)
 
   def analyze(self, me: Player, world: World, game: Game):
