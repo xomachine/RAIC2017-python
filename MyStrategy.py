@@ -7,7 +7,7 @@ from model.FacilityType import FacilityType
 from model.Unit import Unit
 from model.VehicleType import VehicleType
 from collections import deque
-from math import pi
+from math import pi, copysign
 from functools import reduce
 
 fuzz = 1
@@ -494,7 +494,8 @@ def do_shuffle(ss, w: World, m: Move):
       return deque()
     else:
       rcenter = f.get_center()
-      rcenter.x = f.left
+      rcenter.x = f.left - 2 # minus unit radius
+      rcenter.y += 2 # plus unit radius
       return deque([select_vehicles(a), rotate(pi, rcenter)])
   fifth_turn = deque([
     at_flag("rerotated", 1, deque([fill_flag("formation_done")])),
@@ -648,11 +649,12 @@ def shuffle(s):
   return (deque([at_flag("compacted", 1, deque([do_shuffle]))]) +
           initial_compact(s))
 
-def move_to_enemies(group: int, max_speed: float):
+def move_to_enemies(gr: int, max_speed: float):
   valdst = 1 # amount over distance factor
   def do_move(s: MyStrategy, w: World, m: Move, max_speed = max_speed):
     vs = s.worldstate.vehicles
-    myg = vs.by_group[group]
+    aviaspeedfactor = 1
+    myg = vs.by_group[gr]
     my = vs.resolve(myg)
     marea = get_square(my)
     mycenter = marea.get_center()
@@ -674,12 +676,28 @@ def move_to_enemies(group: int, max_speed: float):
       #print(str(value) + " == " + str(new_value))
       if distance < criticaldistance:
         # combat mode! fight or flee!
-        if len(myg - vs.damaged) > len(set(cluster) - vs.damaged):
+        cluset = set(cluster)
+        if len(myg - vs.damaged) - len(cluset - vs.damaged) > -1:
           #fight!
           print("Fight!")
           least = Unit(None, (clustercenter.x+mycenter.x)/2,
                        (clustercenter.y+mycenter.y)/2)
           max_speed = max_speed / 2
+          aerialCount = len(vs.by_group[gr+1] - vs.damaged)
+          if aerialCount == 0:
+            break
+          aerialDangers = (vs.by_type[VehicleType.FIGHTER] |
+                             vs.by_type[VehicleType.IFV])
+          ifvCount = (len(cluset & aerialDangers) +
+                      len(cluset & vs.by_type[VehicleType.TANK]) *
+                      len(vs.by_type[VehicleType.HELICOPTER] & vs.by_group[gr+1])
+                      / len(vs.by_group[gr+1]))
+          aviaadvantage = (aerialCount-ifvCount)/(ifvCount+aerialCount)
+          if aviaadvantage > 0.1:
+            # If avia advantage
+            aviaspeedfactor = 2 + aviaadvantage
+          elif len(vs.by_group[gr+1] & vs.by_group[gr]) > 0:
+            aviaspeedfactor = 0.8 - aviaadvantage
         else:
           print("Flee!")
           least = Unit(None, 2*mycenter.x-clustercenter.x, 2*mycenter.y-clustercenter.y)
@@ -693,6 +711,21 @@ def move_to_enemies(group: int, max_speed: float):
     dx = least.x - mycenter.x
     dy = least.y - mycenter.y
     destination = Unit(None, dx, dy)
+    if aviaspeedfactor != 1:
+      s.current_action.appendleft(move(destination,
+                                       max_speed = aviaspeedfactor*max_speed))
+      s.current_action.appendleft(group(gr, action = ActionType.DISMISS))
+      s.current_action.appendleft(select_vehicles(marea, group = gr + 1))
+    elif len(myg & vs.by_group[gr+1]) == 0:
+      aviacenter = get_square(vs.resolve(vs.by_group[gr+1])).get_center()
+      ddx = copysign(100*max_speed, dx)
+      ddy = copysign(100*max_speed, dy)
+      overmain = Unit(None, mycenter.x-aviacenter.x+ddx,
+                      mycenter.y-aviacenter.y+ddy)
+      s.current_action.appendleft(move(overmain,
+                                       max_speed = 2*max_speed))
+      s.current_action.appendleft(group(gr, action = ActionType.ASSIGN))
+      s.current_action.appendleft(select_vehicles(marea, group = gr + 1))
     s.current_action.appendleft(move(destination, max_speed = max_speed))
   return do_move
 
@@ -709,7 +742,7 @@ def hunt(group: int, game: Game):
       s.current_action += deque([hurricane(group), hunt(group, game)])
     else:
       huntchain = deque([
-        select_vehicles(s.full_area),
+        select_vehicles(s.full_area, group = group),
         move_to_enemies(group, game.tank_speed * game.swamp_terrain_speed_factor),
         wait(100),
         hunt(group, game)
@@ -741,6 +774,10 @@ class MyStrategy:
     if world.tick_index == 0:
       self.init(me, world, game)
       self.current_action += deque([
+        select_vehicles(self.full_area, vtype = VehicleType.HELICOPTER),
+        select_vehicles(self.full_area, vtype = VehicleType.FIGHTER,
+                        action = ActionType.ADD_TO_SELECTION),
+        group(2),
         select_vehicles(self.full_area),
         group(1),
         at_flag("formation_done", 1, deque([
