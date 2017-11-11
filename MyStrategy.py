@@ -12,6 +12,11 @@ from functools import reduce
 
 fuzz = 1
 criticaldensity = 1/25 # how tight should the vehicles stay
+FLYERS = 0
+GROUNDERS = 1
+movables = [VehicleType.IFV, VehicleType.ARRV, VehicleType.FIGHTER]
+types = [[VehicleType.HELICOPTER, VehicleType.FIGHTER],
+         [VehicleType.TANK, VehicleType.IFV, VehicleType.ARRV]]
 
 class Area:
   def __init__(self, l: float, r: float, t: float, b: float):
@@ -133,6 +138,7 @@ def get_square(vehicles: list):
 
 def fill_flag(name: str):
   def do_fill(s: MyStrategy, w: World, m: Move):
+    print("Filling flag: " + name)
     if name in s.flags:
       s.flags[name] += 1
     else:
@@ -143,6 +149,7 @@ def at_flag(name: str, count: int, actions: deque):
   ## Adds actions to current queue if flag filled
   def event(s: MyStrategy, w: World, c: int = count):
     if (not (name in s.flags)) or s.flags[name] >= c:
+      print("Got " + str(c) + " in " + name)
       ## If dict key does not exist, it means that previous handler just
       ## have deleted it and flag had filled before
       s.current_action = actions + s.current_action
@@ -432,11 +439,6 @@ def initial_compact(s):
     Area(spawnarea.right - colwidth, spawnarea.right, spawnarea.top,
          spawnarea.bottom),
   ]
-  FLYERS = 0
-  GROUNDERS = 1
-  movables = [VehicleType.IFV, VehicleType.ARRV, VehicleType.FIGHTER]
-  types = [[VehicleType.HELICOPTER, VehicleType.FIGHTER],
-           [VehicleType.TANK, VehicleType.IFV, VehicleType.ARRV]]
   sets = [reduce(lambda x, y: y | x, list(map(lambda x: vs.by_type[x], i)))
           for i in types]
   namefull = "secondturn"
