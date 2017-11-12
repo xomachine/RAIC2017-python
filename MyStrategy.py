@@ -145,6 +145,14 @@ class WorldState:
     self.vehicles.update(world)
     self.facilities.update(world)
 
+def get_center(vehicles: list):
+  length = len(vehicles)
+  assert(length > 0)
+  center = length//2
+  xsort = sorted(vehicles, key=lambda x: x.x)
+  ysort = sorted(vehicles, key=lambda x: x.y)
+  return Unit(None, xsort[center].x, ysort[center].y)
+
 def get_square(vehicles: list):
   maxx = 0
   maxy = 0
