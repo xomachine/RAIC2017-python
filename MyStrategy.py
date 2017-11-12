@@ -171,7 +171,7 @@ def get_square(vehicles: list):
 
 def fill_flag(name: str):
   def do_fill(s: MyStrategy, w: World, m: Move):
-    print("Filling flag: " + name)
+    #print("Filling flag: " + name)
     if name in s.flags:
       s.flags[name] += 1
     else:
@@ -182,7 +182,7 @@ def at_flag(name: str, count: int, actions: deque):
   ## Adds actions to current queue if flag filled
   def event(s: MyStrategy, w: World, c: int = count):
     if (not (name in s.flags)) or s.flags[name] >= c:
-      print("Got " + str(c) + " in " + name)
+      #print("Got " + str(c) + " in " + name)
       ## If dict key does not exist, it means that previous handler just
       ## have deleted it and flag had filled before
       s.current_action = actions + s.current_action
@@ -193,7 +193,7 @@ def at_flag(name: str, count: int, actions: deque):
   def do_add_event(s: MyStrategy, w: World, m:Move):
     if not (name in s.flags):
       s.flags[name] = 0
-    print("Waiting " + str(count) + " on flag: " + name)
+    #print("Waiting " + str(count) + " on flag: " + name)
     s.events.append(event)
   return do_add_event
 
@@ -202,7 +202,7 @@ def at_move_end(watchers: set, actions: deque):
   def do_eventme(s: MyStrategy, w: World):
     intersect = s.worldstate.vehicles.updated & watchers
     if (not (name in s.flags)) or s.flags[name] >= 2:
-      print("Move ended for " + name)
+      #print("Move ended for " + name)
       if name in s.flags:
         s.flags.pop(name)
       s.current_action = actions + s.current_action
@@ -214,7 +214,7 @@ def at_move_end(watchers: set, actions: deque):
     return False
   def do_waitme(s: MyStrategy, w: World, m:Move):
     s.events.append(do_eventme)
-    print("Waiting move end for set:" + name)
+    #print("Waiting move end for set:" + name)
     s.flags[name] = 0
   return do_waitme
 
@@ -289,7 +289,7 @@ def move(destination: Unit, max_speed: float = 0.0):
     m.action = ActionType.MOVE
     m.x = destination.x
     m.y = destination.y
-    print("Moving to: " + str(destination.x) + ":" + str(destination.y))
+    #print("Moving to: " + str(destination.x) + ":" + str(destination.y))
     m.max_speed = max_speed
   return do_move
 
@@ -315,7 +315,7 @@ def select_vehicles(area: Area, vtype: VehicleType = None, group: int = 0,
                     action: range(1, 4) = ActionType.CLEAR_AND_SELECT):
   def do_select(s: MyStrategy, w: World, m: Move, a = area):
     m.action = action
-    print("Selecting: " + str(a))
+    #print("Selecting: " + str(a))
     m.left = a.left - fuzz
     m.right = a.right + fuzz
     m.top = a.top
@@ -328,11 +328,10 @@ def hurricane(group: int):
   def do_hurricane(s, w:World, m: Move):
     vs = s.worldstate.vehicles
     pv = vs.by_group[group]
-    myv = vs.resolve(pv)
-    mya = get_square(myv)
-    print("Hurricane!")
-    print(mya)
-    epicenter = mya.get_center()
+    myv = list(vs.resolve(pv))
+    #print("Hurricane!")
+    #print(mya)
+    epicenter = get_center(myv)
     result = deque([
       select_vehicles(s.full_area, group = group),
       scale(epicenter, 0.1),
@@ -486,8 +485,8 @@ def do_shuffle(ss, w: World, m: Move):
   pv = vss.by_player[vss.me]
   myv = vss.resolve(pv)
   mya = get_square(myv)
-  print("Area after alighment")
-  print(mya)
+  #print("Area after alighment")
+  #print(mya)
   parts = 10
   step = (mya.bottom - mya.top) / parts
   central = Area.copy(ss.full_area)
@@ -612,8 +611,8 @@ def initial_compact(s):
       squadsfromset[i] = len(unitsfromset[i])//100
       if squadsfromset[i] > 0:
         empties.discard(i)
-    print("Type " + str(t) + " has " + str(squadsfromset) + " squads by columns")
-    print(empties)
+    #print("Type " + str(t) + " has " + str(squadsfromset) + " squads by columns")
+    #print(empties)
     for i, col in enumerate(columns):
       if squadsfromset[i] > 0:
         name = "firstturn:" + str(t)
@@ -626,31 +625,31 @@ def initial_compact(s):
           if t == GROUNDERS and i != 1:
             sample = vs[movecandidateset.pop()]
             obstacle = set()
-            print("Checking for obstacles...")
+            #print("Checking for obstacles...")
             for lno, line in enumerate(lines):
               if line.is_inside(sample):
-                print("... at line " + str(lno))
+                #print("... at line " + str(lno))
                 obstacle = (vs.in_area(line) & vs.in_area(columns[1]) &
                             sets[t])
                 break
             if len(obstacle) > 0:
-              print("Obstacle detected")
+              #print("Obstacle detected")
               obstacletype = vs[obstacle.pop()].type
               if obstacletype == VehicleType.TANK:
-                print("It is tank, lets find something else to move")
+                #print("It is tank, lets find something else to move")
                 continue
               else:
                 tcol = empties.pop()
                 empties.add(1)
                 target = Unit(None, columns[tcol].left - columns[1].left, 0)
-                print("Move obstacle from 1 to " + str(tcol))
+                #print("Move obstacle from 1 to " + str(tcol))
                 result += do_and_check([
                   select_vehicles(s.full_area, vtype = obstacletype),
                   move(target)], name, unitsfromset[i])
                 registredflags += 1
           tcol = empties.pop()
           target = Unit(None, columns[tcol].left - columns[i].left, 0)
-          print("Move from " + str(i) + " to " + str(tcol))
+          #print("Move from " + str(i) + " to " + str(tcol))
           result += do_and_check([
             select_vehicles(s.full_area, vtype = tomovetype),
             move(target)], name, unitsfromset[i])
