@@ -14,6 +14,13 @@ fuzz = 1
 criticaldensity = 1/25 # how tight should the vehicles stay
 FLYERS = 0
 GROUNDERS = 1
+typebyname = {
+  VehicleType.ARRV: "arrv",
+  VehicleType.FIGHTER: "fighter",
+  VehicleType.HELICOPTER: "helicopter",
+  VehicleType.IFV: "ifv",
+  VehicleType.TANK: "tank",
+}
 movables = [VehicleType.IFV, VehicleType.ARRV, VehicleType.FIGHTER]
 types = [[VehicleType.HELICOPTER, VehicleType.FIGHTER],
          [VehicleType.TANK, VehicleType.IFV, VehicleType.ARRV]]
@@ -760,6 +767,31 @@ class MyStrategy:
   def init(self, me: Player, world: World, game: Game):
     self.full_area = Area(0.0,world.width,0.0,world.height)
     self.free_groups = set(range(game.max_unit_group+1))
+    self.effectiveness = dict()
+    def construct(t, ending = "durability", vt = None):
+      if ending == "durability" or vt is None:
+        name = typebyname[a] + "_durability"
+      else:
+        clas = None
+        if vt in types[FLYERS]:
+          clas = "_aerial_"
+        else:
+          clas =  "_ground_"
+        name = typebyname[t] + clas + ending
+      if hasattr(game, name):
+        return getattr(game, name)
+      return 0
+    def positive(a):
+      if a < 0:
+        return 0
+      return a
+    for a in typebyname.keys():
+      self.effectiveness[a] = dict()
+      for d in typebyname.keys():
+        self.effectiveness[a][d] = (
+          positive(construct(a, "damage", d)-construct(d, "defence", a))
+          /construct(d))
+    #print(self.effectiveness)
     self.worldstate = WorldState(world)
 
   def analyze(self, me: Player, world: World, game: Game):
