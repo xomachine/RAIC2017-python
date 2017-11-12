@@ -87,7 +87,7 @@ class Vehicles(TaggedDict):
         for g in i.groups:
           self.by_group.setdefault(g, set()).add(i.id)
         for g in fullgroups - newgroups:
-          self.by_group.setdefault(g, set()).discard(i.id)
+          self.by_group[g].discard(i.id)
       if i.durability == 0:
         self.pop(i.id, None)
         for s in self.by_player.values():
@@ -658,6 +658,7 @@ def move_to_enemies(gr: int, max_speed: float):
     my = vs.resolve(myg)
     marea = get_square(my)
     mycenter = marea.get_center()
+    aviasupport = vs.by_group[gr+1]
     enemies = list(vs.resolve(vs.by_player[vs.opponent]))
     clusters = clusterize(enemies)
     least = get_square(enemies)
@@ -677,27 +678,27 @@ def move_to_enemies(gr: int, max_speed: float):
       if distance < criticaldistance:
         # combat mode! fight or flee!
         cluset = set(cluster)
-        if len(myg - vs.damaged) - len(cluset - vs.damaged) > -1:
+        if len((myg | aviasupport)-vs.damaged) - len(cluset-vs.damaged) > -1:
           #fight!
           print("Fight!")
           least = Unit(None, (clustercenter.x+mycenter.x)/2,
                        (clustercenter.y+mycenter.y)/2)
           max_speed = max_speed / 2
-          aerialCount = len(vs.by_group[gr+1] - vs.damaged)
+          aerialCount = len(aviasupport - vs.damaged)
           if aerialCount == 0:
             break
           aerialDangers = (vs.by_type[VehicleType.FIGHTER] |
                              vs.by_type[VehicleType.IFV])
           ifvCount = (len(cluset & aerialDangers) +
                       len(cluset & vs.by_type[VehicleType.TANK]) *
-                      len(vs.by_type[VehicleType.HELICOPTER] & vs.by_group[gr+1])
-                      / len(vs.by_group[gr+1]))
+                      len(vs.by_type[VehicleType.HELICOPTER] & aviasupport)
+                      / len(aviasupport))
           aviaadvantage = (aerialCount-ifvCount)/(ifvCount+aerialCount)
-          if aviaadvantage > 0.1:
+          if aviaadvantage > 0.3:
             # If avia advantage
             aviaspeedfactor = 2 + aviaadvantage
-          elif len(vs.by_group[gr+1] & vs.by_group[gr]) > 0:
-            aviaspeedfactor = 0.8 - aviaadvantage
+          elif len(aviasupport & myg) > 0:
+            aviaspeedfactor = 0.5
         else:
           print("Flee!")
           least = Unit(None, 2*mycenter.x-clustercenter.x, 2*mycenter.y-clustercenter.y)
@@ -716,8 +717,8 @@ def move_to_enemies(gr: int, max_speed: float):
                                        max_speed = aviaspeedfactor*max_speed))
       s.current_action.appendleft(group(gr, action = ActionType.DISMISS))
       s.current_action.appendleft(select_vehicles(marea, group = gr + 1))
-    elif len(myg & vs.by_group[gr+1]) == 0:
-      aviacenter = get_square(vs.resolve(vs.by_group[gr+1])).get_center()
+    elif len(myg & aviasupport) == 0:
+      aviacenter = get_square(vs.resolve(aviasupport)).get_center()
       ddx = copysign(100*max_speed, dx)
       ddy = copysign(100*max_speed, dy)
       overmain = Unit(None, mycenter.x-aviacenter.x+ddx,
