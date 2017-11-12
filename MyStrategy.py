@@ -508,8 +508,7 @@ def do_shuffle(ss, w: World, m: Move):
       return deque()
     else:
       rcenter = f.get_center()
-      rcenter.x = f.left - 2 # minus unit radius
-      rcenter.y += 2 # plus unit radius
+      rcenter.x = f.left - 1 # minus unit radius
       return deque([select_vehicles(a), rotate(pi, rcenter)])
   fifth_turn = deque([
     at_flag("rerotated", 1, deque([fill_flag("formation_done")])),
@@ -600,7 +599,7 @@ def initial_compact(s):
           counted += 1
     return (deque([at_flag(name, counted, deque([fill_flag(namefull)]))]) +
             secondturn)
-  for t in [FLYERS, GROUNDERS]:
+  for t in [GROUNDERS, FLYERS]:
     empties = set(range(3))
     registredflags = 0
     unitsfromset = [None]*len(columns)
