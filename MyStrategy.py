@@ -662,58 +662,71 @@ def shuffle(s):
   return (deque([at_flag("compacted", 1, deque([do_shuffle]))]) +
           initial_compact(s))
 
+def calculate(eff: dict, v: Vehicles, my: set, enemies: set):
+  result = 0.0
+  for mt in typebyname.keys():
+    mylen = len(my & v.by_type[mt])
+    if mylen > 0:
+      #print("Calculation for " + typebyname[mt])
+      for et in typebyname.keys():
+        enlen = len(enemies & v.by_type[et])
+        if enlen > 0:
+          corr = (mylen * eff[mt][et] - enlen * eff[et][mt])
+          #print("...and " + typebyname[et] + " = " + str(corr))
+          result += corr
+  return result
+
 def move_to_enemies(gr: int, max_speed: float):
   valdst = 1 # amount over distance factor
   def do_move(s: MyStrategy, w: World, m: Move, max_speed = max_speed):
     vs = s.worldstate.vehicles
     aviaspeedfactor = 1
     myg = vs.by_group[gr]
-    my = vs.resolve(myg)
+    my = list(vs.resolve(myg))
     marea = get_square(my)
-    mycenter = marea.get_center()
+    mycenter = get_center(my)
     aviasupport = vs.by_group[gr+1]
+    aviacenter = get_center(list(vs.resolve(aviasupport)))
     enemies = list(vs.resolve(vs.by_player[vs.opponent]))
-    clusters = clusterize(enemies)
-    least = get_square(enemies)
+    clusters = clusterize(enemies, thresh = 20)
+    aviaingroup = len(myg & aviasupport)
+    allmine = len(myg | aviasupport)
+    groundmine = len(my)
+    least = get_center(enemies)
     value = 500
     mindistance = 2000
     for c in clusters:
-      print("Cluster:" + str(len(c)))
+      #print("Cluster:" + str(len(c)))
       cluster = list(map(lambda x: enemies[x], c))
-      carea = get_square(cluster)
-      clustercenter = carea.get_center()
+      clustercenter = get_center(cluster)
       distance = mycenter.get_distance_to_unit(clustercenter)
       #new_value = map(lambda i: 1-int(i.type==0)-int(i.type==1)/2, cluster)
       #new_value = reduce(lambda x, y: x+y, new_value)
       new_value = len(cluster)
-      criticaldistance = (new_value + len(myg))/4 # should be obtained empirically
+      criticaldistance = (new_value+groundmine)/4 # should be obtained empirically
       #print(str(value) + " == " + str(new_value))
       if distance < criticaldistance:
         # combat mode! fight or flee!
-        cluset = set(cluster)
-        if len((myg | aviasupport)-vs.damaged) - len(cluset-vs.damaged) > -1:
+        cluset = set(map(lambda x: x.id, cluster))
+        fulladvantage = calculate(s.effectiveness, vs, (myg | aviasupport) - vs.damaged, cluset)
+        #if len((myg | aviasupport)-vs.damaged) / len(myg | aviasupport) > 0.7:
+        if fulladvantage > 0 and len((myg | aviasupport)-vs.damaged) / allmine > 0.7:
           #fight!
-          print("Fight!")
-          least = Unit(None, (clustercenter.x+mycenter.x)/2,
-                       (clustercenter.y+mycenter.y)/2)
+          #print("Fight!")
+          least = Unit(None, mycenter.x + (clustercenter.x-mycenter.x)/3,
+                       mycenter.y + (clustercenter.y-mycenter.y)/3)
+          mindistance = distance
+          value = new_value
           max_speed = max_speed / 2
-          aerialCount = len(aviasupport - vs.damaged)
-          if aerialCount == 0:
-            break
-          aerialDangers = (vs.by_type[VehicleType.FIGHTER] |
-                             vs.by_type[VehicleType.IFV])
-          ifvCount = (len(cluset & aerialDangers) +
-                      len(cluset & vs.by_type[VehicleType.TANK]) *
-                      len(vs.by_type[VehicleType.HELICOPTER] & aviasupport)
-                      / len(aviasupport))
-          aviaadvantage = (aerialCount-ifvCount)/(ifvCount+aerialCount)
-          if aviaadvantage > 0.3:
-            # If avia advantage
-            aviaspeedfactor = 2 + aviaadvantage
-          elif len(aviasupport & myg) > 0:
+          aviaadvantage = calculate(s.effectiveness, vs,
+                                    aviasupport - vs.damaged, cluset)
+          #print("Aviaadvantage: " + str(aviaadvantage))
+          if aviaadvantage > 10:
+            aviaspeedfactor = 2 + aviaadvantage/10
+          elif aviaingroup > 0 and aviaadvantage < -10:
             aviaspeedfactor = 0.5
         else:
-          print("Flee!")
+          #print("Flee!")
           least = Unit(None, 2*mycenter.x-clustercenter.x, 2*mycenter.y-clustercenter.y)
           #flee!
         break
@@ -722,16 +735,16 @@ def move_to_enemies(gr: int, max_speed: float):
         least = clustercenter
         value = new_value
         mindistance = distance
-    dx = least.x - mycenter.x
-    dy = least.y - mycenter.y
+    dx = (least.x - mycenter.x)
+    dy = (least.y - mycenter.y)
     destination = Unit(None, dx, dy)
     if aviaspeedfactor != 1:
-      s.current_action.appendleft(move(destination,
+      aviadestination = Unit(None, least.x-aviacenter.x, least.y-aviacenter.y)
+      s.current_action.appendleft(move(aviadestination,
                                        max_speed = aviaspeedfactor*max_speed))
       s.current_action.appendleft(group(gr, action = ActionType.DISMISS))
       s.current_action.appendleft(select_vehicles(marea, group = gr + 1))
-    elif len(myg & aviasupport) == 0:
-      aviacenter = get_square(vs.resolve(aviasupport)).get_center()
+    elif aviaingroup == 0:
       ddx = copysign(100*max_speed, dx)
       ddy = copysign(100*max_speed, dy)
       overmain = Unit(None, mycenter.x-aviacenter.x+ddx,
@@ -743,23 +756,34 @@ def move_to_enemies(gr: int, max_speed: float):
     s.current_action.appendleft(move(destination, max_speed = max_speed))
   return do_move
 
-def hunt(group: int, game: Game):
+def hunt(gr: int, game: Game):
   def do_hunt(s: MyStrategy, w: World, m: Move):
     vs = s.worldstate.vehicles
-    myv = list(vs.resolve(vs.by_group[group]))
+    myv = list(vs.resolve(vs.by_group[gr]))
     mya = get_square(myv)
     density = len(myv)/mya.area()
-    print("Density is: " + str(density))
-    print("Area is: " + str(mya))
-    print("Amount is: " + str(len(myv)))
+    #print("Density is: " + str(density))
+    #print("Area is: " + str(mya))
+    #print("Amount is: " + str(len(myv)))
     if density < criticaldensity:
-      s.current_action += deque([hurricane(group), hunt(group, game)])
+      if len(vs.by_group[gr] & vs.by_group[gr+1]) == 0:
+        destination = get_center(myv)
+        aerials = vs.by_group[gr+1]
+        pos = get_center(list(vs.resolve(aerials)))
+        targetv = Unit(None, destination.x - pos.x, destination.y - pos.y)
+        s.current_action.append(select_vehicles(s.full_area, group = gr+1))
+        s.current_action.append(move(targetv))
+        s.current_action.append(at_move_end(aerials, deque([
+          select_vehicles(s.full_area, group = gr+1),
+          group(gr),
+        ])))
+      s.current_action += deque([hurricane(gr), hunt(gr, game)])
     else:
       huntchain = deque([
-        select_vehicles(s.full_area, group = group),
-        move_to_enemies(group, game.tank_speed * game.swamp_terrain_speed_factor),
+        select_vehicles(s.full_area, group = gr),
+        move_to_enemies(gr, game.tank_speed * game.swamp_terrain_speed_factor),
         wait(100),
-        hunt(group, game)
+        hunt(gr, game)
       ])
       s.current_action += huntchain
   return do_hunt
