@@ -33,8 +33,10 @@ class Area:
     self.bottom = b
   def get_center(self):
     return Unit(None, (self.left + self.right)/2, (self.top + self.bottom)/2)
-  def copy(a):
-    return Area(a.left, a.right, a.top, a.bottom)
+  def mirror(self):
+    return Area(self.top, self.bottom, self.left, self.right)
+  def copy(self):
+    return Area(self.left, self.right, self.top, self.bottom)
   def is_inside(self, point):
     return (point.x <= self.right and point.x >= self.left and
             point.y >= self.top and point.y <= self.bottom)
@@ -357,7 +359,7 @@ def hurricane(group: int):
     s.current_action = result + s.current_action
   return do_hurricane
 
-def devide(unitset: set, each: callable, parts: int, name: str):
+def devide(unitset: set, each: callable, parts: int, name: str, horizontal = False):
   ## devide unitset to `parts` parts and do `each` with each part
   ## each must be a callable that returns deque of actual actions and gets
   ## a group number as argument. actions will be applied in order from
@@ -374,14 +376,21 @@ def devide(unitset: set, each: callable, parts: int, name: str):
     pv = (vs.by_player[vs.me] & unitset)
     units = vs.resolve(pv)
     uarea = get_square(units)
+    if horizontal:
+      uarea = uarea.mirror()
     step = (uarea.bottom - uarea.top) / parts
     for i in ordered:
-      pa = Area.copy(s.full_area)
+      pa = s.full_area.copy()
       pa.top = step * i + uarea.top
       pa.bottom = step * (i+1) + uarea.top
-      vehicles = vs.in_area(pa)
-      s.current_action = (do_and_check(each(i, pa, uarea), tmpname, vehicles)
-                          + s.current_action)
+      if horizontal:
+        vehicles = vs.in_area(pa.mirror())
+        s.current_action = (do_and_check(each(i, pa.mirror(), uarea.mirror()),
+                                         tmpname, vehicles) + s.current_action)
+      else:
+        vehicles = vs.in_area(pa)
+        s.current_action = (do_and_check(each(i, pa, uarea), tmpname, vehicles)
+                            + s.current_action)
     s.current_action.appendleft(at_flag(tmpname, parts,
                                          deque([fill_flag(name)])))
   return do_devide
