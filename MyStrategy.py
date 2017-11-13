@@ -172,7 +172,7 @@ def get_square(vehicles: list):
   return Area(minx, maxx, miny, maxy)
 
 def fill_flag(name: str):
-  def do_fill(s: MyStrategy, w: World, m: Move):
+  def do_fill(s: MyStrategy, w: World, g: Game, m: Move):
     #print("Filling flag: " + name)
     if name in s.flags:
       s.flags[name] += 1
@@ -192,7 +192,7 @@ def at_flag(name: str, count: int, actions: deque):
         s.flags.pop(name)
       return True
     return False
-  def do_add_event(s: MyStrategy, w: World, m:Move):
+  def do_add_event(s: MyStrategy, w: World, g: Game, m: Move):
     if not (name in s.flags):
       s.flags[name] = 0
     #print("Waiting " + str(count) + " on flag: " + name)
@@ -214,7 +214,7 @@ def at_move_end(watchers: set, actions: deque):
     else:
       s.flags[name] = 0
     return False
-  def do_waitme(s: MyStrategy, w: World, m:Move):
+  def do_waitme(s: MyStrategy, w: World, g: Game, m: Move):
     s.events.append(do_eventme)
     #print("Waiting move end for set:" + name)
     s.flags[name] = 0
@@ -222,7 +222,7 @@ def at_move_end(watchers: set, actions: deque):
 
 def wait(ticks: int):
   counter = ticks
-  def do_wait(s: MyStrategy, w: World, m: Move):
+  def do_wait(s: MyStrategy, w: World, g: Game, m: Move):
     s.waiter = w.tick_index + counter
   return do_wait
 
@@ -278,7 +278,7 @@ def clusterize(ipoints: list, thresh: float = 10, kgrid: int = 10):
   return clusters
 
 def rotate(angle: float, center: Unit, max_speed: float = 0.0):
-  def do_rotate(s: MyStrategy, w: World, m: Move):
+  def do_rotate(s: MyStrategy, w: World, g: Game, m: Move):
     m.action = ActionType.ROTATE
     m.angle = angle
     m.max_angular_speed = max_speed
@@ -287,7 +287,7 @@ def rotate(angle: float, center: Unit, max_speed: float = 0.0):
   return do_rotate
 
 def move(destination: Unit, max_speed: float = 0.0):
-  def do_move(s: MyStrategy, w: World, m: Move):
+  def do_move(s: MyStrategy, w: World, g: Game, m: Move):
     m.action = ActionType.MOVE
     m.x = destination.x
     m.y = destination.y
@@ -296,7 +296,7 @@ def move(destination: Unit, max_speed: float = 0.0):
   return do_move
 
 def group(gnum: int, action: range(4, 7) = ActionType.ASSIGN):
-  def do_group(s: MyStrategy, w: World, m: Move):
+  def do_group(s: MyStrategy, w: World, g: Game, m: Move):
     m.action = action
     m.group = gnum
     if action == ActionType.ASSIGN:
@@ -306,7 +306,7 @@ def group(gnum: int, action: range(4, 7) = ActionType.ASSIGN):
   return do_group
 
 def scale(center: Unit, factor: float):
-  def do_scale(s: MyStrategy, w: World, m: Move):
+  def do_scale(s: MyStrategy, w: World, g: Game, m: Move):
     m.action = ActionType.SCALE
     m.factor = factor
     m.x = center.x
@@ -315,7 +315,7 @@ def scale(center: Unit, factor: float):
 
 def select_vehicles(area: Area, vtype: VehicleType = None, group: int = 0,
                     action: range(1, 4) = ActionType.CLEAR_AND_SELECT):
-  def do_select(s: MyStrategy, w: World, m: Move, a = area):
+  def do_select(s: MyStrategy, w: World, g: Game, m: Move, a = area):
     m.action = action
     #print("Selecting: " + str(a))
     m.left = a.left - fuzz
@@ -369,7 +369,7 @@ def devide(unitset: set, each: callable, parts: int, name: str, horizontal = Fal
   halfparts = parts // 2
   ordered = sorted(range(parts), key = lambda x: abs(x-halfparts))
   tmpname = "devision:" + str(hash(frozenset(unitset)))
-  def do_devide(s: MyStrategy, w: World, m: Move):
+  def do_devide(s: MyStrategy, w: World, g: Game, m: Move):
     vs = s.worldstate.vehicles
     # to avoid non existing units we using intersection with
     # all players units
@@ -394,6 +394,14 @@ def devide(unitset: set, each: callable, parts: int, name: str, horizontal = Fal
     s.current_action.appendleft(at_flag(tmpname, parts,
                                          deque([fill_flag(name)])))
   return do_devide
+
+def nuke_it(target: Unit, navigator: int):
+  def do_nuke(s: MyStrategy, w: World, g: Game, m: Move):
+    m.action = ActionType.TACTICAL_NUCLEAR_STRIKE
+    m.x = target.x
+    m.y = target.y
+    m.vehicle_id = navigator
+  return do_nuke
 
 def select_types(types: list, area: Area):
   # Makes the queue of actions to select types list in given area
@@ -422,7 +430,7 @@ def do_and_check(action, flag: str, group: set):
 def tight(group: set):
   ## Tights the group
   name = "devided:" + str(hash(frozenset(group)))
-  def do_tight(s: MyStrategy, w: World, m: Move):
+  def do_tight(s: MyStrategy, w: World, g: Game, m: Move):
     vs = s.worldstate.vehicles
     pv = vs.by_player[vs.me]
     actualgroup = group & pv
@@ -444,7 +452,7 @@ def initial_shuffle():
   ## Units should be initially set in one line
   ## Returns a closure to place into MyStrategy.current_action
   tightflag = "tighted"
-  def do_shuffle(s: MyStrategy, w: World, m: Move):
+  def do_shuffle(s: MyStrategy, w: World, g: Game, m: Move):
     vs = s.worldstate.vehicles
     classes = [reduce(lambda x,y: y | x, list(map(lambda x: vs.by_type[x], i)))
                for i in types]
@@ -489,7 +497,7 @@ def initial_shuffle():
     s.current_action = result + s.current_action
   return do_shuffle
 
-def do_shuffle(ss, w: World, m: Move):
+def do_shuffle(ss, w: World, g: Game, m: Move):
   vss = ss.worldstate.vehicles
   pv = vss.by_player[vss.me]
   myv = vss.resolve(pv)
@@ -687,7 +695,7 @@ def calculate(eff: dict, v: Vehicles, my: set, enemies: set):
 
 def move_to_enemies(gr: int, max_speed: float):
   valdst = 1 # amount over distance factor
-  def do_move(s: MyStrategy, w: World, m: Move, max_speed = max_speed):
+  def do_move(s: MyStrategy, w: World, g: Game, m: Move, max_speed = max_speed):
     vs = s.worldstate.vehicles
     aviaspeedfactor = 1
     myg = vs.by_group[gr]
@@ -721,6 +729,23 @@ def move_to_enemies(gr: int, max_speed: float):
         cluset = set(map(lambda x: x.id, cluster))
         fulladvantage = calculate(s.effectiveness, vs, (myg | aviasupport) - vs.damaged, cluset)
         #if len((myg | aviasupport)-vs.damaged) / len(myg | aviasupport) > 0.7:
+        print(fulladvantage)
+        if (fulladvantage < 0 and
+            w.get_my_player().remaining_nuclear_strike_cooldown_ticks == 0):
+          navigator = -1
+          dst = 2000
+          for i in aviasupport:
+            ndst = vs[i].get_distance_to_unit(clustercenter)
+            if ndst < dst:
+              dst = ndst
+              navigator = i
+          if navigator > 0:
+            narea = get_square([vs[navigator]])
+            s.current_action.append(nuke_it(clustercenter, navigator))
+            s.current_action.append(select_vehicles(narea, vtype=VehicleType.FIGHTER))
+            s.current_action.append(move(clustercenter, max_speed))
+            # slowly go to the enemy
+          # NUKE IS COMMING!
         if len((myg | aviasupport)-vs.damaged) / allmine > 0.7:
           #fight!
           #print("Fight!")
@@ -768,7 +793,7 @@ def move_to_enemies(gr: int, max_speed: float):
   return do_move
 
 def hunt(gr: int, game: Game):
-  def do_hunt(s: MyStrategy, w: World, m: Move):
+  def do_hunt(s: MyStrategy, w: World, g: Game, m: Move):
     vs = s.worldstate.vehicles
     myv = list(vs.resolve(vs.by_group[gr]))
     mya = get_square(myv)
@@ -863,7 +888,7 @@ class MyStrategy:
     if len(self.current_action) > 0 and self.actionsRemaining > 0 and self.waiter < world.tick_index:
       while len(self.current_action) > 0:
         act = self.current_action.popleft()
-        act(self, world, move)
+        act(self, world, game, move)
         if move.action != ActionType.NONE:
           self.actionsRemaining -= 1
           break
