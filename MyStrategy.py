@@ -712,7 +712,7 @@ def move_to_enemies(gr: int, max_speed: float):
         cluset = set(map(lambda x: x.id, cluster))
         fulladvantage = calculate(s.effectiveness, vs, (myg | aviasupport) - vs.damaged, cluset)
         #if len((myg | aviasupport)-vs.damaged) / len(myg | aviasupport) > 0.7:
-        if fulladvantage > 0 and len((myg | aviasupport)-vs.damaged) / allmine > 0.7:
+        if len((myg | aviasupport)-vs.damaged) / allmine > 0.7:
           #fight!
           #print("Fight!")
           least = Unit(None, mycenter.x + (clustercenter.x-mycenter.x)/3,
