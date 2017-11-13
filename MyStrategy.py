@@ -6,7 +6,7 @@ from model.World import World
 from model.FacilityType import FacilityType
 from model.Unit import Unit
 from model.VehicleType import VehicleType
-from collections import deque
+from collections import deque, defaultdict
 from math import pi, copysign
 from functools import reduce
 
@@ -58,9 +58,9 @@ class Vehicles(TaggedDict):
   def __init__(self, world: World):
     self.me = world.get_my_player().id
     self.opponent = world.get_opponent_player().id
-    self.by_player = dict()
-    self.by_type = dict()
-    self.by_group = dict()
+    self.by_player = defaultdict(lambda: set())
+    self.by_type = defaultdict(lambda: set())
+    self.by_group = defaultdict(lambda: set())
     self.updated = set()
     self.damaged = set()
     TaggedDict.__init__(self, world.new_vehicles)
@@ -688,6 +688,8 @@ def move_to_enemies(gr: int, max_speed: float):
     aviasupport = vs.by_group[gr+1]
     aviacenter = get_center(list(vs.resolve(aviasupport)))
     enemies = list(vs.resolve(vs.by_player[vs.opponent]))
+    if len(enemies) == 0:
+      return # some patroling action might be inserted later
     clusters = clusterize(enemies, thresh = 20)
     aviaingroup = len(myg & aviasupport)
     allmine = len(myg | aviasupport)
