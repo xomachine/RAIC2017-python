@@ -427,6 +427,20 @@ def do_and_check(action, flag: str, group: set):
     at_move_end(group, deque([fill_flag(flag)]))
   ])
 
+def on_nuke(actions: deque):
+  def check_nuke(s: MyStrategy, w: World):
+    enemy = w.get_opponent_player()
+    if(enemy.next_nuclear_strike_vehicle_id > 0 and
+       not s.flags["nuke detected"]):
+      s.current_action = actions + s.current_action
+      s.flags["nuke detected"] = True
+    elif s.flags["nuke detected"] and enemy.next_nuclear_strike_vehicle_id <= 0:
+      s.flags["nuke detected"] = False
+  def add_event(s: MyStrategy, w: World, g: Game, m: Move):
+    s.flags["nuke detected"] = False
+    s.events.append(check_nuke)
+  return add_event
+
 def tight(group: set):
   ## Tights the group
   name = "devided:" + str(hash(frozenset(group)))
@@ -811,11 +825,51 @@ def hunt(gr: int, game: Game):
       huntchain = deque([
         select_vehicles(s.full_area, group = gr),
         move_to_enemies(gr, game.tank_speed * game.swamp_terrain_speed_factor),
-        wait(100),
+        wait(60),
         hunt(gr, game)
       ])
       s.current_action += huntchain
   return do_hunt
+
+def kill_or_flee():
+  def do_kill(s: MyStrategy, w: World, g: Game, m: Move):
+    enemy = w.get_opponent_player()
+    vs = s.worldstate.vehicles
+    epicenter = Unit(None, enemy.next_nuclear_strike_x,
+                     enemy.next_nuclear_strike_y)
+    radius = game.tactical_nuclear_strike_radius + 10
+    enemies = vs.resolve(vs.by_player[vs.opponent])
+    clusters = clusterize(enemies)
+    navigator = enemy.next_nuclear_strike_vehicle_id
+    in_cluster_of_len = 0
+    for c in clusters:
+      cluset = set()
+      for i in c:
+        cluset.add(enemies[i].id)
+      if navigator in cluset:
+        in_cluster_of_len = len(c)
+        break
+    expl_area = Area(epicenter.x-radius, epicenter.x+radius, epicenter.y-radius, epicenter.y+radius)
+    my_avias = vs.by_player[vs.me] & (vs.by_type[VehicleType.HELICOPTER] |
+                                      vs.by_type[VehicleType.FIGHTER])
+    my_avias_len = len(my_avias)
+    if my_avias_len >= in_cluster_of_len:
+      target = vs[navigator]
+      shift = Unit(None, target.x - epicenter.x, target.y - epicenter.y)
+      result = [
+        select_vehicles(expl_area, vtype = VehicleType.HELICOPTER),
+        move(shift),
+        select_vehicles(expl_area, vtype = VehicleType.FIGHTER),
+        move(shift),
+      ]
+    else:
+      result = [
+        select_vehicles(expl_area),
+        scale(epicenter, 10)
+      ]
+    result.append(wait(enemy.next_nuclear_strike_tick_index - w.tick_index))
+    s.current_action = deque(result) + s.current_action
+  return do_kill
 
 class MyStrategy:
   current_action = deque()
@@ -873,6 +927,7 @@ class MyStrategy:
         select_vehicles(self.full_area),
         group(1),
         at_flag("formation_done", 1, deque([
+            on_nuke(deque([kill_or_flee()])),
             hunt(1, game)
           ]))
         ])
