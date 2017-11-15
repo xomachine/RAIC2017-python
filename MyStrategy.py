@@ -7,7 +7,7 @@ from model.FacilityType import FacilityType
 from model.Unit import Unit
 from model.VehicleType import VehicleType
 from collections import deque, defaultdict
-from math import pi, copysign
+from math import pi, copysign, sqrt
 from functools import reduce
 
 fuzz = 1
@@ -717,7 +717,8 @@ def move_to_enemies(gr: int, max_speed: float):
     marea = get_square(my)
     mycenter = get_center(my)
     aviasupport = vs.by_group[gr+1]
-    aviacenter = get_center(list(vs.resolve(aviasupport)))
+    if len(aviasupport) > 0:
+      aviacenter = get_center(list(vs.resolve(aviasupport)))
     enemies = list(vs.resolve(vs.by_player[vs.opponent]))
     if len(enemies) == 0:
       return # some patroling action might be inserted later
@@ -743,9 +744,11 @@ def move_to_enemies(gr: int, max_speed: float):
         cluset = set(map(lambda x: x.id, cluster))
         fulladvantage = calculate(s.effectiveness, vs, (myg | aviasupport) - vs.damaged, cluset)
         #if len((myg | aviasupport)-vs.damaged) / len(myg | aviasupport) > 0.7:
-        print(fulladvantage)
-        if (w.get_my_player().remaining_nuclear_strike_cooldown_ticks == 0 and
-            len(cluster) > 20):
+        print("Advantage: " + str(fulladvantage))
+        print("Cluster length: " + str(len(cluster)))
+        nuke_cd = w.get_my_player().remaining_nuclear_strike_cooldown_ticks
+        if (nuke_cd == 0 and len(cluster) > 20):
+          print("NUKE IT!")
           navigator = -1
           dst = 2000
           for i in aviasupport:
@@ -755,24 +758,45 @@ def move_to_enemies(gr: int, max_speed: float):
               navigator = i
           if navigator > 0:
             narea = get_square([vs[navigator]])
-            s.current_action.append(nuke_it(clustercenter, navigator))
-            s.current_action.append(select_vehicles(narea, vtype=VehicleType.FIGHTER))
-            s.current_action.append(move(clustercenter, max_speed))
+            aviaspeedfactor = 10
+            if dst <= 2*g.fighter_vision_range/3:
+              s.flags["nuking"] = w.tick_index + 60
+              s.current_action.append(nuke_it(clustercenter, navigator))
+            else:
+              s.flags["nuking"] = 20000
+              target = Unit(None, clustercenter.x-aviacenter.x,
+                            clustercenter.y-aviacenter.y)
+              if target.x == 0:
+                target = Unit(None, target.x, target.y-g.fighter_vision_range)
+              elif target.y == 0:
+                target = Unit(None, target.x-g.fighter_vision_range, target.y)
+              else:
+                slope = target.y/target.x
+                dx = sqrt((g.fighter_vision_range**2)/(slope**2 + 1))
+                dy = dx * slope
+                target = Unit(None, target.x - dx, target.y - dy)
+              s.current_action.append(select_vehicles(narea, vtype=VehicleType.FIGHTER))
+              s.current_action.append(move(target))
             # slowly go to the enemy
+          else:
+            print("Navigator not found")
           # NUKE IS COMMING!
+        elif "nuking" in s.flags and s.flags["nuking"] < w.tick_index:
+          s.flags.pop("nuking")
         #fight!
         least = Unit(None, mycenter.x + (clustercenter.x-mycenter.x)/2,
                      mycenter.y + (clustercenter.y-mycenter.y)/2)
         mindistance = distance
         value = new_value
         max_speed = max_speed * 0.8
-        aviaadvantage = calculate(s.effectiveness, vs,
-                                  aviasupport - vs.damaged, cluset)
-        #print("Aviaadvantage: " + str(aviaadvantage))
-        if aviaadvantage > 0:
-          aviaspeedfactor = 10
-        elif aviaingroup > 0 and aviaadvantage < -10:
-          aviaspeedfactor = 0.5
+        if aviaspeedfactor == 1:
+          aviaadvantage = calculate(s.effectiveness, vs,
+                                    aviasupport - vs.damaged, cluset)
+          #print("Aviaadvantage: " + str(aviaadvantage))
+          if aviaadvantage > 0:
+            aviaspeedfactor = 10
+          elif aviaingroup > 0 and aviaadvantage < -10:
+            aviaspeedfactor = 0.5
       if value * valdst + mindistance > new_value * valdst + distance:
         #print(str(value) + " > " + str(new_value))
         least = clustercenter
@@ -781,13 +805,13 @@ def move_to_enemies(gr: int, max_speed: float):
     dx = (least.x - mycenter.x)
     dy = (least.y - mycenter.y)
     destination = Unit(None, dx, dy)
-    if aviaspeedfactor != 1:
+    if aviaspeedfactor != 1 or "nuking" in s.flags:
       aviadestination = Unit(None, least.x-aviacenter.x, least.y-aviacenter.y)
       s.current_action.appendleft(move(aviadestination,
                                        max_speed = aviaspeedfactor*max_speed))
       s.current_action.appendleft(group(gr, action = ActionType.DISMISS))
       s.current_action.appendleft(select_vehicles(marea, group = gr + 1))
-    elif aviaingroup == 0:
+    elif aviaingroup == 0 and not "nuking" in s.flags:
       ddx = copysign(100*max_speed, dx)
       ddy = copysign(100*max_speed, dy)
       overmain = Unit(None, mycenter.x-aviacenter.x+ddx,
