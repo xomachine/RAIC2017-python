@@ -327,7 +327,7 @@ def select_vehicles(area: Area, vtype: VehicleType = None, group: int = 0,
   return do_select
 
 def hurricane(group: int):
-  def do_hurricane(s, w:World, m: Move):
+  def do_hurricane(s, w:World, g: Game, m: Move):
     vs = s.worldstate.vehicles
     pv = vs.by_group[group]
     myv = list(vs.resolve(pv))
@@ -722,7 +722,7 @@ def move_to_enemies(gr: int, max_speed: float):
       #new_value = map(lambda i: 1-int(i.type==0)-int(i.type==1)/2, cluster)
       #new_value = reduce(lambda x, y: x+y, new_value)
       new_value = len(cluster)
-      criticaldistance = (new_value+groundmine)/4 # should be obtained empirically
+      criticaldistance = (new_value+groundmine)/2 # should be obtained empirically
       #print(str(value) + " == " + str(new_value))
       if distance < criticaldistance:
         # combat mode! fight or flee!
@@ -730,8 +730,8 @@ def move_to_enemies(gr: int, max_speed: float):
         fulladvantage = calculate(s.effectiveness, vs, (myg | aviasupport) - vs.damaged, cluset)
         #if len((myg | aviasupport)-vs.damaged) / len(myg | aviasupport) > 0.7:
         print(fulladvantage)
-        if (fulladvantage < 0 and
-            w.get_my_player().remaining_nuclear_strike_cooldown_ticks == 0):
+        if (w.get_my_player().remaining_nuclear_strike_cooldown_ticks == 0 and
+            len(cluster) > 20):
           navigator = -1
           dst = 2000
           for i in aviasupport:
@@ -746,26 +746,19 @@ def move_to_enemies(gr: int, max_speed: float):
             s.current_action.append(move(clustercenter, max_speed))
             # slowly go to the enemy
           # NUKE IS COMMING!
-        if len((myg | aviasupport)-vs.damaged) / allmine > 0.7:
-          #fight!
-          #print("Fight!")
-          least = Unit(None, mycenter.x + (clustercenter.x-mycenter.x)/3,
-                       mycenter.y + (clustercenter.y-mycenter.y)/3)
-          mindistance = distance
-          value = new_value
-          max_speed = max_speed / 2
-          aviaadvantage = calculate(s.effectiveness, vs,
-                                    aviasupport - vs.damaged, cluset)
-          #print("Aviaadvantage: " + str(aviaadvantage))
-          if aviaadvantage > 10:
-            aviaspeedfactor = 2 + aviaadvantage/10
-          elif aviaingroup > 0 and aviaadvantage < -10:
-            aviaspeedfactor = 0.5
-        else:
-          #print("Flee!")
-          least = Unit(None, 2*mycenter.x-clustercenter.x, 2*mycenter.y-clustercenter.y)
-          #flee!
-        break
+        #fight!
+        least = Unit(None, mycenter.x + (clustercenter.x-mycenter.x)/2,
+                     mycenter.y + (clustercenter.y-mycenter.y)/2)
+        mindistance = distance
+        value = new_value
+        max_speed = max_speed * 0.8
+        aviaadvantage = calculate(s.effectiveness, vs,
+                                  aviasupport - vs.damaged, cluset)
+        #print("Aviaadvantage: " + str(aviaadvantage))
+        if aviaadvantage > 0:
+          aviaspeedfactor = 10
+        elif aviaingroup > 0 and aviaadvantage < -10:
+          aviaspeedfactor = 0.5
       if value * valdst + mindistance > new_value * valdst + distance:
         #print(str(value) + " > " + str(new_value))
         least = clustercenter
