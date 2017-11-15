@@ -7,7 +7,7 @@ from model.FacilityType import FacilityType
 from model.Unit import Unit
 from model.VehicleType import VehicleType
 from collections import deque, defaultdict
-from math import pi, copysign
+from math import pi, copysign, atan2, sqrt
 from functools import reduce
 
 fuzz = 1
@@ -110,6 +110,15 @@ class Vehicles(TaggedDict):
       elif health > 0.99:
         self.damaged.discard(i.id)
 
+def normalize_angle(angle):
+  while angle > pi:
+    angle -= 2*pi
+  while angle < -pi:
+    angle += 2*pi
+  return angle
+
+def get_angle_between(a: Unit, b: Unit):
+  return atan2((a.y - b.y), (a.x - b.x))
 
 class Facilities(TaggedDict):
   def __init__(self, world: World):
@@ -187,7 +196,7 @@ def at_flag(name: str, count: int, actions: deque):
       #print("Got " + str(c) + " in " + name)
       ## If dict key does not exist, it means that previous handler just
       ## have deleted it and flag had filled before
-      s.current_action = actions + s.current_action
+      s.action_queue = actions + s.action_queue
       if name in s.flags:
         s.flags.pop(name)
       return True
@@ -207,7 +216,7 @@ def at_move_end(watchers: set, actions: deque):
       #print("Move ended for " + name)
       if name in s.flags:
         s.flags.pop(name)
-      s.current_action = actions + s.current_action
+      s.action_queue = actions + s.action_queue
       return True
     if len(intersect) == 0:
       s.flags[name] += 1
@@ -356,7 +365,7 @@ def hurricane(group: int):
       select_vehicles(s.full_area, group = group),
       scale(epicenter, 0.1),
     ])
-    s.current_action = result + s.current_action
+    s.action_queue = result + s.action_queue
   return do_hurricane
 
 def devide(unitset: set, each: callable, parts: int, name: str, horizontal = False):
@@ -385,13 +394,13 @@ def devide(unitset: set, each: callable, parts: int, name: str, horizontal = Fal
       pa.bottom = step * (i+1) + uarea.top
       if horizontal:
         vehicles = vs.in_area(pa.mirror())
-        s.current_action = (do_and_check(each(i, pa.mirror(), uarea.mirror()),
-                                         tmpname, vehicles) + s.current_action)
+        s.action_queue = (do_and_check(each(i, pa.mirror(), uarea.mirror()),
+                                         tmpname, vehicles) + s.action_queue)
       else:
         vehicles = vs.in_area(pa)
-        s.current_action = (do_and_check(each(i, pa, uarea), tmpname, vehicles)
-                            + s.current_action)
-    s.current_action.appendleft(at_flag(tmpname, parts,
+        s.action_queue = (do_and_check(each(i, pa, uarea), tmpname, vehicles)
+                            + s.action_queue)
+    s.action_queue.appendleft(at_flag(tmpname, parts,
                                          deque([fill_flag(name)])))
   return do_devide
 
@@ -444,57 +453,16 @@ def tight(group: set):
         select_vehicles(partarea),
         scale(center, 0.1),
       ])
-    s.current_action.appendleft(devide(actualgroup, each, 2, name))
+    s.action_queue.appendleft(devide(actualgroup, each, 2, name))
   return do_tight
 
 def initial_shuffle():
   ## Shuffles initially spawned groups of units into one
   ## Units should be initially set in one line
-  ## Returns a closure to place into MyStrategy.current_action
+  ## Returns a closure to place into MyStrategy.action_queue
   tightflag = "tighted"
   def do_shuffle(s: MyStrategy, w: World, g: Game, m: Move):
     vs = s.worldstate.vehicles
-    classes = [reduce(lambda x,y: y | x, list(map(lambda x: vs.by_type[x], i)))
-               for i in types]
-    pv = vs.by_player[vs.me]
-    allunits = vs.resolve(pv)
-    fullarea = get_square(allunits)
-    pointofscale = Unit(None, fullarea.left, fullarea.top)
-    result = deque()
-    for clas in range(len(classes)):
-      units = vs.resolve(classes[clas] & pv)
-      area = get_square(units)
-      pointofscale = Unit(None, area.left, area.top)
-      spreadflag = "spread:" + str(clas)
-      shiftflag = "shifted:" + str(clas)
-      mergeflag = "merged:" + str(clas)
-      spread_groups = select_types(types[clas], s.full_area)
-      spread_groups += do_and_check(scale(pointofscale, len(types[clas])),
-                                    spreadflag, classes[clas])
-      shift_groups = deque()
-      merge_groups = deque()
-      slowpockarea = get_square(vs.resolve(vs.by_type[types[clas][0]]))
-      for i in range(1, len(types[clas])):
-        shift = 4 * i/len(types[clas]) # 4 - vehicle diameter
-        thetype = types[clas][i]
-        destination = Unit(None, 0, shift)
-        group_of_interest = vs.by_type[thetype] & pv
-        goi_area = get_square(vs.resolve(group_of_interest))
-        shift_groups += deque([select_vehicles(s.full_area, vtype=thetype)])
-        shift_groups += do_and_check(move(destination), shiftflag,
-                                     group_of_interest)
-        aligned_destination = Unit(None, slowpockarea.left - goi_area.left, 0)
-        merge_groups += deque([select_vehicles(s.full_area, vtype = thetype)])
-        merge_groups += do_and_check(move(aligned_destination), mergeflag, group_of_interest)
-      tight_groups = select_types(types[clas], s.full_area)
-      tight_groups += do_and_check(scale(pointofscale, 0.1), tightflag,
-                                   classes[clas])
-      result += shift_groups
-      result += deque([at_flag(spreadflag, 1, merge_groups)])
-      result += deque([at_flag(shiftflag, 1, spread_groups)])
-      result += deque([at_flag(mergeflag, 1, tight_groups)])
-      result += deque([at_flag(tightflag, 2, deque([fill_flag("shuffled")]))])
-    s.current_action = result + s.current_action
   return do_shuffle
 
 def do_shuffle(ss, w: World, g: Game, m: Move):
@@ -506,30 +474,35 @@ def do_shuffle(ss, w: World, g: Game, m: Move):
   #print(mya)
   parts = 10
   step = (mya.bottom - mya.top) / parts
-  central = Area.copy(ss.full_area)
+  central = ss.full_area.copy()
   fragment_area = get_square(vss.resolve(pv & vss.by_type[VehicleType.IFV]))
   fragment = fragment_area.right - fragment_area.left
   central.left = (mya.left + mya.right - fragment)/2
   central.right = central.left + fragment
-  righter = Area.copy(ss.full_area)
+  righter = ss.full_area.copy()
   righter.right = mya.right
   righter.left = mya.right - fragment
-  lefter = Area.copy(ss.full_area)
+  lefter = ss.full_area.copy()
   lefter.left = mya.left
   lefter.right = mya.left + fragment
   #fourth_turn = deque([
     #select_vehicles(ss.full_area),
     #rotate(-pi/2, Unit(None, central.right + fragment/2, mya.top + fragment*2))
   def halfrotate(i, a, f):
-    if i == 0:
-      return deque()
-    else:
-      rcenter = f.get_center()
-      rcenter.x = f.left - 1 # minus unit radius
-      return deque([select_vehicles(a), rotate(pi, rcenter)])
+    pass
+    #if i == 0:
+    #  return deque()
+    #else:
+    #  rcenter = f.get_center()
+    #  rcenter.x = f.left - 1 # minus unit radius
+    #  return deque([select_vehicles(a), rotate(pi, rcenter)])
+  def when_done(s: MyStrategy, w: World, g: Game, m: Move):
+    vs = s.worldstate.vehicles
+    s.formations.append(Formation(s, vs.by_player[vs.me], "formation_done"))
   fifth_turn = deque([
-    at_flag("rerotated", 1, deque([fill_flag("formation_done")])),
-    devide(vss.by_group[1], halfrotate, 2, "rerotated")
+    when_done
+    #at_flag("grouped", 1, deque([fill_flag("formation_done")])),
+    #devide(vss.by_group[1], halfrotate, 2, "grouped")
    ])
   fourth_turn = (do_and_check(tight(pv), "tighted", pv) +
     deque([at_flag("tighted", 1, fifth_turn)]))
@@ -565,8 +538,8 @@ def do_shuffle(ss, w: World, g: Game, m: Move):
       select_vehicles(a),
       move(target),
       ])
-  ss.current_action.appendleft(devide(pv, each, parts, "loosed"))
-  ss.current_action.appendleft(at_flag("loosed", 1, second_turn))
+  ss.action_queue.appendleft(devide(pv, each, parts, "loosed"))
+  ss.action_queue.appendleft(at_flag("loosed", 1, second_turn))
 
 def initial_compact(s):
   ## Compactifies the initial spawn into one line
@@ -741,9 +714,9 @@ def move_to_enemies(gr: int, max_speed: float):
               navigator = i
           if navigator > 0:
             narea = get_square([vs[navigator]])
-            s.current_action.append(nuke_it(clustercenter, navigator))
-            s.current_action.append(select_vehicles(narea, vtype=VehicleType.FIGHTER))
-            s.current_action.append(move(clustercenter, max_speed))
+            s.action_queue.append(nuke_it(clustercenter, navigator))
+            s.action_queue.append(select_vehicles(narea, vtype=VehicleType.FIGHTER))
+            s.action_queue.append(move(clustercenter, max_speed))
             # slowly go to the enemy
           # NUKE IS COMMING!
         if len((myg | aviasupport)-vs.damaged) / allmine > 0.7:
@@ -776,20 +749,20 @@ def move_to_enemies(gr: int, max_speed: float):
     destination = Unit(None, dx, dy)
     if aviaspeedfactor != 1:
       aviadestination = Unit(None, least.x-aviacenter.x, least.y-aviacenter.y)
-      s.current_action.appendleft(move(aviadestination,
+      s.action_queue.appendleft(move(aviadestination,
                                        max_speed = aviaspeedfactor*max_speed))
-      s.current_action.appendleft(group(gr, action = ActionType.DISMISS))
-      s.current_action.appendleft(select_vehicles(marea, group = gr + 1))
+      s.action_queue.appendleft(group(gr, action = ActionType.DISMISS))
+      s.action_queue.appendleft(select_vehicles(marea, group = gr + 1))
     elif aviaingroup == 0:
       ddx = copysign(100*max_speed, dx)
       ddy = copysign(100*max_speed, dy)
       overmain = Unit(None, mycenter.x-aviacenter.x+ddx,
                       mycenter.y-aviacenter.y+ddy)
-      s.current_action.appendleft(move(overmain,
+      s.action_queue.appendleft(move(overmain,
                                        max_speed = 2*max_speed))
-      s.current_action.appendleft(group(gr, action = ActionType.ASSIGN))
-      s.current_action.appendleft(select_vehicles(marea, group = gr + 1))
-    s.current_action.appendleft(move(destination, max_speed = max_speed))
+      s.action_queue.appendleft(group(gr, action = ActionType.ASSIGN))
+      s.action_queue.appendleft(select_vehicles(marea, group = gr + 1))
+    s.action_queue.appendleft(move(destination, max_speed = max_speed))
   return do_move
 
 def hunt(gr: int, game: Game):
@@ -807,13 +780,13 @@ def hunt(gr: int, game: Game):
         aerials = vs.by_group[gr+1]
         pos = get_center(list(vs.resolve(aerials)))
         targetv = Unit(None, destination.x - pos.x, destination.y - pos.y)
-        s.current_action.append(select_vehicles(s.full_area, group = gr+1))
-        s.current_action.append(move(targetv))
-        s.current_action.append(at_move_end(aerials, deque([
+        s.action_queue.append(select_vehicles(s.full_area, group = gr+1))
+        s.action_queue.append(move(targetv))
+        s.action_queue.append(at_move_end(aerials, deque([
           select_vehicles(s.full_area, group = gr+1),
           group(gr),
         ])))
-      s.current_action += deque([hurricane(gr), hunt(gr, game)])
+      s.action_queue += deque([hurricane(gr), hunt(gr, game)])
     else:
       huntchain = deque([
         select_vehicles(s.full_area, group = gr),
@@ -821,17 +794,151 @@ def hunt(gr: int, game: Game):
         wait(100),
         hunt(gr, game)
       ])
-      s.current_action += huntchain
+      s.action_queue += huntchain
   return do_hunt
 
+class Formation:
+  IDLE = 0
+  ATTACK = 1
+  MOVING = 2
+  FLEEING = 3
+  def __init__(self, strategy, units: set, name: str):
+    ## This method queues the necessary moves to create new formation
+    ## area is the area where units for formation are placed
+    ## its recomended to place it as tight as possible and make it homogenius
+    self.aerials = [None, None]
+    self.grounds = [None, None]
+    self.subgroups = [None, None]
+    self.aerial_separated = False
+    self.state = self.IDLE
+    vs = strategy.worldstate.vehicles
+    self.units = units
+    self.id = hash(frozenset(self.units))
+    for i in range(2):
+      self.grounds[i] = strategy.free_groups.pop()
+      self.aerials[i] = strategy.free_groups.pop()
+    def each(i, pa, fa):
+      self.subgroups[i] = vs.in_area(pa)
+      gnum = self.grounds[i]
+      aerialnum = self.aerials[i]
+      print("Adding groups " + str(gnum) + " for grounds and " + str(aerialnum) + " for aerials")
+      return deque([
+        select_vehicles(pa),
+        group(gnum),
+        select_vehicles(pa, vtype=VehicleType.FIGHTER),
+        select_vehicles(pa, vtype=VehicleType.HELICOPTER,
+                        action=ActionType.ADD_TO_SELECTION),
+        group(aerialnum)
+      ])
+    strategy.action_queue.appendleft(
+      devide(self.units, each, 2, "grouped:" + name))
+
+  def update_state(self, strategy):
+    if self.subgroups[0] == None:
+      print("WTF???")
+      return
+    vs = strategy.worldstate.vehicles
+    pv = vs.by_player[vs.me]
+    gr1 = list(vs.resolve(pv & self.subgroups[0]))
+    gr2 = list(vs.resolve(pv & self.subgroups[1]))
+    center1 = get_center(gr1)
+    center2 = get_center(gr2)
+    self.center = Unit(None, (center1.x+center2.x)/2, (center1.y+center2.y)/2)
+    self.centers = [center1, center2]
+    self.direction = get_angle_between(center1, center2) + pi/2
+    self.distance = center1.get_distance_to_unit(center2)
+    self.densities = [None, None]
+    area1 = get_square(gr1)
+    area2 = get_square(gr2)
+    self.densities[0] = len(gr1)/area1.area()
+    self.densities[1] = len(gr2)/area2.area()
+
+  def setdistance(self, distance):
+    ## TODO
+    def do_set(s: MyStrategy, w: World, g: Game, m: Move):
+      dx = self.centers[0].x - self.centers[1].x
+      dy = (self.centers[0].y - self.centers[1].y)
+      if dx == 0:
+        newdx = 0
+        newdy = distance
+      elif dy == 0:
+        newdy = 0
+        newdx = distance
+      else:
+        slope = dy/dx
+        newdx = sqrt(distance**2/(slope+1))
+        newdy = newx * slope
+      else:
+      # next step is to find relative changes from current center coordinates
+      for c in self.centers:
+        if distance > self.distance:
+          target = 
+
+    return do_set
+
+  def attack_behaviour(self, s, w: World):
+    if not self.aerial_separated:
+      # separated aerials
+      pass
+
+  def reaction(self, strategy, w: World):
+    if self.state == self.ATTACK:
+      self.attack_behaviour(strategy, w)
+
+  def select(self, strategy):
+    def do_select(s: MyStrategy, w: World, g: Game, m: Move):
+      act = ActionType.CLEAR_AND_SELECT
+      for gr in self.grounds:
+        s.actions_queue.append(select_vehicles(group=gr), action=act)
+        act = ActionType.ADD_TO_SELECTION
+    return do_select
+
+  def rotate_to(self, strategy, target: Unit):
+    def do_rotate(s: MyStrategy, w: World, g: Game, m: Move):
+      angle_to_target = get_angle_between(self.center, target)
+      angle_to_rotate = normalize_angle(angle_to_taget - self.direction)
+      strategy.actions_queue.appendleft(
+        self.select(strategy),
+        do_and_check(rotate(angle_to_rotate, self.center),
+                     "rotated:" + str(self.id), self.units))
+    return do_rotate
+
+  def attack(self, strategy, target: Unit):
+    self.state = self.ATTACK
+    def do_attack(s: MyStrategy, w: World, g: Game, m: Move):
+      to_target = self.center.get_distance_to_unit(target)
+      eye_of_attack = None
+      if to_target > self.distance/2:
+        eye_of_attack = Unit(None, (self.center.x+target.x)/2,
+                                   (self.center.y+target.y)/2)
+      else:
+        eye_of_attack = self.center
+      s.actions_queue.appendleft(rotate(-pi, eye_of_rotation))
+      s.actions_queue.appendleft(select_vehicles(group=self.grounds[0]))
+      s.actions_queue.appendleft(rotate(pi, eye_of_rotation))
+      s.actions_queue.appendleft(select_vehicles(group=self.grounds[1]))
+    return do_attack
+
+  def move_to(self, strategy, target: Unit):
+    def do_move(s: MyStrategy, w: World, g: Game, m: Move):
+      s.actions_queue.appendleft(self.rotate_to(strategy, target))
+      reltarget = Unit(None, target.x - self.center.x, target.y - self.center.y)
+      s.actions_queue.appendleft(at_flag("rotated:"+str(self.id), 1,
+        deque([
+          self.select(s),
+          move(reltarget)
+        ])))
+    return do_move
+
 class MyStrategy:
-  current_action = deque()
+  action_queue = deque()
   events = list()
   flags = dict()
   waiter = -1
   nomoveturns = 0
   def init(self, me: Player, world: World, game: Game):
     self.full_area = Area(0.0,world.width,0.0,world.height)
+    self.formations = list()
     self.free_groups = set(range(game.max_unit_group+1))
     self.effectiveness = dict()
     def construct(t, ending = "durability", vt = None):
@@ -860,6 +967,9 @@ class MyStrategy:
     #print(self.effectiveness)
     self.worldstate = WorldState(world)
 
+  def get_free_group(self):
+    return self.free_groups.pop()
+
   def analyze(self, me: Player, world: World, game: Game):
     self.worldstate.update(world)
     facilities = self.worldstate.facilities
@@ -868,26 +978,29 @@ class MyStrategy:
       game.additional_action_count_per_control_center * len(myccid))
     if world.tick_index % 60 == 0:
       self.actionsRemaining = self.actionsPerTick
+    if self.actionsRemaining > 0:
+      for formation in self.formations:
+        formation.update_state(self)
 
   def move(self, me: Player, world: World, game: Game, move: Move):
     if world.tick_index == 0:
       self.init(me, world, game)
-      self.current_action += deque([
-        select_vehicles(self.full_area, vtype = VehicleType.HELICOPTER),
-        select_vehicles(self.full_area, vtype = VehicleType.FIGHTER,
-                        action = ActionType.ADD_TO_SELECTION),
-        group(2),
-        select_vehicles(self.full_area),
-        group(1),
-        at_flag("formation_done", 1, deque([
-            hunt(1, game)
-          ]))
-        ])
-      self.current_action += shuffle(self)
+      #self.action_queue += deque([
+      #  select_vehicles(self.full_area, vtype = VehicleType.HELICOPTER),
+      #  select_vehicles(self.full_area, vtype = VehicleType.FIGHTER,
+      #                  action = ActionType.ADD_TO_SELECTION),
+      #  group(2),
+      #  select_vehicles(self.full_area),
+      #  group(1),
+      #  at_flag("formation_done", 1, deque([
+      #      hunt(1, game)
+      #    ]))
+      #  ])
+      self.action_queue += shuffle(self)
     self.analyze(me, world, game)
-    if len(self.current_action) > 0 and self.actionsRemaining > 0 and self.waiter < world.tick_index:
-      while len(self.current_action) > 0:
-        act = self.current_action.popleft()
+    if len(self.action_queue) > 0 and self.actionsRemaining > 0 and self.waiter < world.tick_index:
+      while len(self.action_queue) > 0:
+        act = self.action_queue.popleft()
         act(self, world, game, move)
         if move.action != ActionType.NONE:
           self.actionsRemaining -= 1
