@@ -493,9 +493,11 @@ def do_shuffle(ss, w: World, g: Game, m: Move):
     #  return deque([select_vehicles(a), rotate(pi, rcenter)])
   def when_done(s: MyStrategy, w: World, g: Game, m: Move):
     vs = s.worldstate.vehicles
-    s.formations.append(Formation(s, vs.by_player[vs.me], "formation_done"))
+    theformation = Formation(s, vs.by_player[vs.me], "formation_done")
+    s.formations.append(theformation)
+    s.action_queue.appendleft(at_flag("grouped:formation_done", 1, deque([theformation.setdistance(300)])))
   fifth_turn = deque([
-    when_done
+    when_done,
     #at_flag("grouped", 1, deque([fill_flag("formation_done")])),
     #devide(vss.by_group[1], halfrotate, 2, "grouped")
    ])
@@ -803,7 +805,7 @@ def by_xy(distance: float, deltas: Unit):
   else:
     slope = deltas.y/deltas.x
     newdx = sqrt((distance**2)/((slope**2)+1))
-    newdy = newx * slope
+    newdy = newdx * slope
   return Unit(None, newdx, newdy)
 
 class Formation:
@@ -818,6 +820,7 @@ class Formation:
     self.aerials = [None, None]
     self.grounds = [None, None]
     self.subgroups = [None, None]
+    self.homeostate = False
     self.aerial_separated = False
     self.state = self.IDLE
     vs = strategy.worldstate.vehicles
@@ -862,6 +865,24 @@ class Formation:
     self.densities[0] = len(gr1)/area1.area()
     self.densities[1] = len(gr2)/area2.area()
 
+  def homeostaze(self, strategy):
+    ## This method is being called every tick and tries to keep Formation
+    ## in its state (adds necessary actions if needed)
+    if self.homeostate:
+      return
+    def remove_homeostate(s, w, g, m):
+      self.homeostate = False
+    for d in range(len(self.densities)):
+      density = self.densities[d]
+      if density and density < criticaldensity:
+        def event_to_hurricane(s, w: World, gr = d):
+          s.action_queue.append(hurricane(self.grounds[gr]))
+          s.action_queue.append(remove_homeostate)
+          return True
+        strategy.events.append(event_to_hurricane)
+        self.homeostate = True
+    pass
+
   def setdistance(self, distance):
     ## Sets distance between the fragments of the formation
     def do_set(s: MyStrategy, w: World, g: Game, m: Move):
@@ -869,29 +890,20 @@ class Formation:
                     self.centers[0].y - self.centers[1].y)
       separatednew = by_xy((self.distance - distance)/2, deltas)
       result = []
-      for c in range(len(self.centers)):
-        dx = copysign(separatednew.x, self.center.x - self.centers[i].x)
-        dy = copysign(separatednew.y, self.center.y - self.centers[i].y)
+      for i in range(len(self.centers)):
+        dx = copysign(separatednew.x, self.centers[i].x - self.center.x)
+        dy = copysign(separatednew.y, self.centers[i].y - self.center.y)
         targetshift = Unit(None, dx, dy)
-        result.append(select_vehicles(group = self.grounds[i]))
+        result.append(select_vehicles(s.full_area, group = self.grounds[i]))
         result.append(move(targetshift))
-      s.actions_queue = deque(result) + s.actions_queue
+      s.action_queue = deque(result) + s.action_queue
     return do_set
-
-  def attack_behaviour(self, s, w: World):
-    if not self.aerial_separated:
-      # separated aerials
-      pass
-
-  def reaction(self, strategy, w: World):
-    if self.state == self.ATTACK:
-      self.attack_behaviour(strategy, w)
 
   def select(self, strategy):
     def do_select(s: MyStrategy, w: World, g: Game, m: Move):
       act = ActionType.CLEAR_AND_SELECT
       for gr in self.grounds:
-        s.actions_queue.append(select_vehicles(group=gr), action=act)
+        s.action_queue.append(select_vehicles(group=gr), action=act)
         act = ActionType.ADD_TO_SELECTION
     return do_select
 
@@ -899,7 +911,7 @@ class Formation:
     def do_rotate(s: MyStrategy, w: World, g: Game, m: Move):
       angle_to_target = get_angle_between(self.center, target)
       angle_to_rotate = normalize_angle(angle_to_taget - self.direction)
-      strategy.actions_queue.appendleft(
+      strategy.action_queue.appendleft(
         self.select(strategy),
         do_and_check(rotate(angle_to_rotate, self.center),
                      "rotated:" + str(self.id), self.units))
@@ -915,17 +927,17 @@ class Formation:
                                    (self.center.y+target.y)/2)
       else:
         eye_of_attack = self.center
-      s.actions_queue.appendleft(rotate(-pi, eye_of_rotation))
-      s.actions_queue.appendleft(select_vehicles(group=self.grounds[0]))
-      s.actions_queue.appendleft(rotate(pi, eye_of_rotation))
-      s.actions_queue.appendleft(select_vehicles(group=self.grounds[1]))
+      s.action_queue.appendleft(rotate(-pi, eye_of_rotation))
+      s.action_queue.appendleft(select_vehicles(group=self.grounds[0]))
+      s.action_queue.appendleft(rotate(pi, eye_of_rotation))
+      s.action_queue.appendleft(select_vehicles(group=self.grounds[1]))
     return do_attack
 
   def move_to(self, strategy, target: Unit):
     def do_move(s: MyStrategy, w: World, g: Game, m: Move):
-      s.actions_queue.appendleft(self.rotate_to(strategy, target))
+      s.action_queue.appendleft(self.rotate_to(strategy, target))
       reltarget = Unit(None, target.x - self.center.x, target.y - self.center.y)
-      s.actions_queue.appendleft(at_flag("rotated:"+str(self.id), 1,
+      s.action_queue.appendleft(at_flag("rotated:"+str(self.id), 1,
         deque([
           self.select(s),
           move(reltarget)
@@ -941,7 +953,7 @@ class MyStrategy:
   def init(self, me: Player, world: World, game: Game):
     self.full_area = Area(0.0,world.width,0.0,world.height)
     self.formations = list()
-    self.free_groups = set(range(game.max_unit_group+1))
+    self.free_groups = set(range(1,game.max_unit_group+1))
     self.effectiveness = dict()
     def construct(t, ending = "durability", vt = None):
       if ending == "durability" or vt is None:
@@ -968,9 +980,6 @@ class MyStrategy:
           /construct(d))
     #print(self.effectiveness)
     self.worldstate = WorldState(world)
-
-  def get_free_group(self):
-    return self.free_groups.pop()
 
   def analyze(self, me: Player, world: World, game: Game):
     self.worldstate.update(world)
@@ -1000,6 +1009,8 @@ class MyStrategy:
       #  ])
       self.action_queue += shuffle(self)
     self.analyze(me, world, game)
+    # Checking the homeostaze and fix it if necessary
+    # Doing actions and triggering events
     if len(self.action_queue) > 0 and self.actionsRemaining > 0 and self.waiter < world.tick_index:
       while len(self.action_queue) > 0:
         act = self.action_queue.popleft()
@@ -1008,6 +1019,8 @@ class MyStrategy:
           self.actionsRemaining -= 1
           break
     elif self.actionsRemaining > 0:
+      for f in self.formations:
+        f.homeostaze(self)
       to_remove = list()
       for i in reversed(self.events):
         if i(self, world):
