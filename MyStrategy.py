@@ -797,6 +797,20 @@ def hunt(gr: int, game: Game):
       s.action_queue += huntchain
   return do_hunt
 
+def by_xy(distance: float, deltas: Unit):
+  ## Splits distance to x and y components in relation set via deltas
+  if deltas.x == 0:
+    newdx = 0
+    newdy = distance
+  elif deltas.y == 0:
+    newdy = 0
+    newdx = distance
+  else:
+    slope = deltas.y/deltas.x
+    newdx = sqrt((distance**2)/((slope**2)+1))
+    newdy = newx * slope
+  return Unit(None, newdx, newdy)
+
 class Formation:
   IDLE = 0
   ATTACK = 1
@@ -854,26 +868,19 @@ class Formation:
     self.densities[1] = len(gr2)/area2.area()
 
   def setdistance(self, distance):
-    ## TODO
+    ## Sets distance between the fragments of the formation
     def do_set(s: MyStrategy, w: World, g: Game, m: Move):
-      dx = self.centers[0].x - self.centers[1].x
-      dy = (self.centers[0].y - self.centers[1].y)
-      if dx == 0:
-        newdx = 0
-        newdy = distance
-      elif dy == 0:
-        newdy = 0
-        newdx = distance
-      else:
-        slope = dy/dx
-        newdx = sqrt(distance**2/(slope+1))
-        newdy = newx * slope
-      else:
-      # next step is to find relative changes from current center coordinates
-      for c in self.centers:
-        if distance > self.distance:
-          target = 
-
+      deltas = Unit(None, self.centers[0].x - self.centers[1].x,
+                    self.centers[0].y - self.centers[1].y)
+      separatednew = by_xy((self.distance - distance)/2, deltas)
+      result = []
+      for c in range(len(self.centers)):
+        dx = copysign(separatednew.x, self.center.x - self.centers[i].x)
+        dy = copysign(separatednew.y, self.center.y - self.centers[i].y)
+        targetshift = Unit(None, dx, dy)
+        result.append(select_vehicles(group = self.grounds[i]))
+        result.append(move(targetshift))
+      s.actions_queue = deque(result) + s.actions_queue
     return do_set
 
   def attack_behaviour(self, s, w: World):
