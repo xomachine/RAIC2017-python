@@ -336,7 +336,7 @@ def select_vehicles(area: Area, vtype: VehicleType = None, group: int = 0,
   return do_select
 
 def hurricane(group: int):
-  def do_hurricane(s, w:World, m: Move):
+  def do_hurricane(s, w:World, g: Game, m: Move):
     vs = s.worldstate.vehicles
     pv = vs.by_group[group]
     myv = list(vs.resolve(pv))
