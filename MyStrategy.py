@@ -359,11 +359,6 @@ def hurricane(group: int):
       select_vehicles(s.full_area, group = group),
       scale(epicenter, 0.1),
       wait(150),
-      select_vehicles(s.full_area, group = group),
-      rotate(pi/8, epicenter),
-      wait(40),
-      select_vehicles(s.full_area, group = group),
-      scale(epicenter, 0.1),
     ])
     s.action_queue = result + s.action_queue
   return do_hurricane
