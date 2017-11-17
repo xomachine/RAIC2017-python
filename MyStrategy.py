@@ -235,6 +235,16 @@ def wait(ticks: int):
     s.waiter = w.tick_index + counter
   return do_wait
 
+def after(ticks: int,  actions):
+  def do_after(s: MyStrategy, w: World, g: Game, m: Move):
+    target_tick = w.tick_index + ticks
+    def at_tick(ss: MyStrategy,  w: World,  tt = target_tick):
+      if w.tick_index >= tt:
+        ss.action_queue = deque(actions) + ss.action_queue
+        return True
+    s.events.append(at_tick)
+  return do_after
+
 def clusterize(ipoints: list, thresh: float = 10, kgrid: int = 10):
   ## Rough clasterization algorithm. No idea if it works
   ## returns set of clusters. each cluster is set of point numbers in original
