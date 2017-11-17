@@ -71,6 +71,60 @@ class Vehicles(TaggedDict):
       self.by_type.setdefault(i.type, set()).add(i.id)
       self.updated.add(i.id)
 
+  def clusterize(self, thresh: float = 10, kgrid: int = 10):
+    ## Rough clasterization algorithm. No idea if it works
+    ## returns set of clusters. each cluster is set of point numbers in original
+    ## list
+    clusters = set()
+    xs = dict()
+    ys = dict()
+    points = list(self.resolve(self.by_player[self.opponent]))
+    for p in range(len(points)):
+      point = points[p]
+      xpos = int(point.x // kgrid)
+      xs.setdefault(xpos, set()).add(p)
+      ypos = int(point.y // kgrid)
+      ys.setdefault(ypos, set()).add(p)
+    for p in range(len(points)):
+      attached = False
+      for c in clusters:
+        if p in c:
+          attached = True
+          break
+      if not attached:
+        point = points[p]
+        xpos = int(point.x // kgrid)
+        ypos = int(point.y // kgrid)
+        newster = set([p])
+        def gset(a: dict, p:int):
+          return a.get(p, set())
+        nears = ((gset(xs, xpos) | gset(xs, xpos+1) | gset(xs, xpos-1) &
+                 (gset(ys, ypos) | gset(ys, ypos+1) | gset(ys, ypos-1)))
+                 ^ newster)
+        attach_to = set()
+        for np in nears:
+          npoint = points[np]
+          distance_sq = point.get_squared_distance_to(npoint.x, npoint.y)
+          if distance_sq < thresh**2:
+            ## We can also take all near points instead of checking distance
+            ## if we want better performance
+            attached = False
+            for c in clusters:
+              if np in c:
+                attached = True
+                attach_to.add(c)
+                break
+            if not attached:
+              newster.add(np)
+        for a in attach_to:
+          newster |= a
+          clusters.discard(a)
+        clusters.add(frozenset(newster))
+    for i in range(len(clusters)):
+      cluster = clusters[i]
+      self.clusters[i] = set()
+      map(lambda x: self.clusters[i].add(points[x].id), cluster)
+
   def in_area(self, a: Area):
     result = set()
     for k, v in self.items():
@@ -109,6 +163,7 @@ class Vehicles(TaggedDict):
         self.damaged.add(i.id)
       elif health > 0.99:
         self.damaged.discard(i.id)
+    self.clusterize(thresh = 20)
 
 def normalize_angle(angle):
   while angle > pi:
@@ -245,56 +300,7 @@ def after(ticks: int,  actions):
     s.events.append(at_tick)
   return do_after
 
-def clusterize(ipoints: list, thresh: float = 10, kgrid: int = 10):
-  ## Rough clasterization algorithm. No idea if it works
-  ## returns set of clusters. each cluster is set of point numbers in original
-  ## list
-  clusters = set()
-  xs = dict()
-  ys = dict()
-  points = list(ipoints)
-  for p in range(len(points)):
-    point = points[p]
-    xpos = int(point.x // kgrid)
-    xs.setdefault(xpos, set()).add(p)
-    ypos = int(point.y // kgrid)
-    ys.setdefault(ypos, set()).add(p)
-  for p in range(len(points)):
-    attached = False
-    for c in clusters:
-      if p in c:
-        attached = True
-        break
-    if not attached:
-      point = points[p]
-      xpos = int(point.x // kgrid)
-      ypos = int(point.y // kgrid)
-      newster = set([p])
-      def gset(a: dict, p:int):
-        return a.get(p, set())
-      nears = ((gset(xs, xpos) | gset(xs, xpos+1) | gset(xs, xpos-1) &
-               (gset(ys, ypos) | gset(ys, ypos+1) | gset(ys, ypos-1)))
-               ^ newster)
-      attach_to = set()
-      for np in nears:
-        npoint = points[np]
-        distance_sq = (point.x - npoint.x)**2 + (point.y - npoint.y)**2 
-        if distance_sq < thresh**2:
-          ## We can also take all near points instead of checking distance
-          ## if we want better performance
-          attached = False
-          for c in clusters:
-            if np in c:
-              attached = True
-              attach_to.add(c)
-              break
-          if not attached:
-            newster.add(np)
-      for a in attach_to:
-        newster |= a
-        clusters.discard(a)
-      clusters.add(frozenset(newster))
-  return clusters
+
 
 def rotate(angle: float, center: Unit, max_speed: float = 0.0):
   def do_rotate(s: MyStrategy, w: World, g: Game, m: Move):
@@ -460,16 +466,6 @@ def tight(group: set):
       ])
     s.action_queue.appendleft(devide(actualgroup, each, 2, name))
   return do_tight
-
-def initial_shuffle():
-  ## Shuffles initially spawned groups of units into one
-  ## Units should be initially set in one line
-  ## Returns a closure to place into MyStrategy.action_queue
-  #tightflag = "tighted"
-  def do_shuffle(s: MyStrategy, w: World, g: Game, m: Move):
-    #vs = s.worldstate.vehicles
-    pass
-  return do_shuffle
 
 def do_shuffle(ss, w: World, g: Game, m: Move):
   vss = ss.worldstate.vehicles
@@ -688,16 +684,15 @@ def move_to_enemies(gr: int, max_speed: float):
     enemies = list(vs.resolve(vs.by_player[vs.opponent]))
     if len(enemies) == 0:
       return # some patroling action might be inserted later
-    clusters = clusterize(enemies, thresh = 20)
+    clusters = vs.clusters
     aviaingroup = len(myg & aviasupport)
     allmine = len(myg | aviasupport)
     groundmine = len(my)
     least = get_center(enemies)
     value = 500
     mindistance = 2000
-    for c in clusters:
+    for cluster in clusters:
       #print("Cluster:" + str(len(c)))
-      cluster = list(map(lambda x: enemies[x], c))
       clustercenter = get_center(cluster)
       distance = mycenter.get_distance_to_unit(clustercenter)
       #new_value = map(lambda i: 1-int(i.type==0)-int(i.type==1)/2, cluster)
