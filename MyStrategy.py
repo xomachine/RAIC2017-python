@@ -356,25 +356,26 @@ def hurricane(group: int):
     vs = s.worldstate.vehicles
     pv = vs.by_group[group]
     myv = list(vs.resolve(pv))
+    epicenter = get_center(myv)
     #print("Hurricane!")
     #print(mya)
-    epicenter = get_center(myv)
-    result = deque([
+    tight = [
       select_vehicles(s.full_area, group = group),
       scale(epicenter, 0.1),
-      wait(30),
+    ]
+    cyclon = [
       select_vehicles(s.full_area, group = group),
       rotate(pi/2, epicenter),
-      wait(30),
+    ]
+    anticyclon = [
       select_vehicles(s.full_area, group = group),
-      scale(epicenter, 0.1),
-      wait(150),
-      select_vehicles(s.full_area, group = group),
-      rotate(-pi/4, epicenter),
-      wait(30),
-      select_vehicles(s.full_area, group = group),
-      scale(epicenter, 0.1),
-      wait(150),
+      rotate(pi/2, epicenter),
+    ]
+    result = deque(tight + [
+      after(30,  cyclon),
+      after(60,  tight),
+      after(90,  anticyclon),
+      after(120,  tight)
     ])
     s.action_queue = result + s.action_queue
   return do_hurricane
