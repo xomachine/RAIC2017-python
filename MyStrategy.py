@@ -264,6 +264,11 @@ def at_flag(name: str, count: int, actions: deque):
   return do_add_event
 
 def at_move_end(watchers: set, actions: deque):
+  if type(watchers) is Formation:
+    nw = set()
+    for g in watchers.subgroups:
+      nw |=g
+    watchers = nw
   name = "move_end:" + str(hash(frozenset(watchers)))
   def do_eventme(s: MyStrategy, w: World):
     intersect = s.worldstate.vehicles.updated & watchers
@@ -488,26 +493,21 @@ def do_shuffle(ss, w: World, g: Game, m: Move):
   lefter = ss.full_area.copy()
   lefter.left = mya.left
   lefter.right = mya.left + fragment
-  #fourth_turn = deque([
-    #select_vehicles(ss.full_area),
-    #rotate(-pi/2, Unit(None, central.right + fragment/2, mya.top + fragment*2))
-  def halfrotate(i, a, f):
-    pass
-    #if i == 0:
-    #  return deque()
-    #else:
-    #  rcenter = f.get_center()
-    #  rcenter.x = f.left - 1 # minus unit radius
-    #  return deque([select_vehicles(a), rotate(pi, rcenter)])
   def when_done(s: MyStrategy, w: World, g: Game, m: Move):
     vs = s.worldstate.vehicles
     theformation = Formation(s, vs.by_player[vs.me], "formation_done")
-    s.formations.append(theformation)
-    s.action_queue.appendleft(at_flag("grouped:formation_done", 1, deque([theformation.setdistance(300)])))
+    def at_done(ss: MyStrategy,  w: World, g: Game, m: Move):
+      ss.formations.append(theformation)
+    after_distance = deque([theformation.hunt()])
+    after_formation = [
+      at_done,
+      theformation.setdistance(200),
+      at_move_end(theformation, after_distance)
+      ]
+    s.action_queue.appendleft(at_flag("grouped:formation_done", 1,
+      deque(after_formation)))
   fifth_turn = deque([
     when_done,
-    #at_flag("grouped", 1, deque([fill_flag("formation_done")])),
-    #devide(vss.by_group[1], halfrotate, 2, "grouped")
    ])
   fourth_turn = (do_and_check(tight(pv), "tighted", pv) +
     deque([at_flag("tighted", 1, fifth_turn)]))
@@ -871,6 +871,9 @@ class Formation:
     area2 = get_square(gr2)
     self.densities[0] = len(gr1)/area1.area()
     self.densities[1] = len(gr2)/area2.area()
+
+  def hunt(self):
+    pass
 
   def homeostaze(self, strategy):
     ## This method is being called every tick and tries to keep Formation
