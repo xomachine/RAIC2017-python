@@ -11,7 +11,7 @@ from math import pi, copysign, atan2, sqrt
 from functools import reduce
 
 fuzz = 1
-criticaldensity = 1/25 # how tight should the vehicles stay
+criticaldensity = 1 / 25  # how tight should the vehicles stay
 FLYERS = 0
 GROUNDERS = 1
 typebyname = {
@@ -47,6 +47,42 @@ class Area:
   def __str__(self):
     return str(self.left) + " <> " + str(self.right) + ":" + str(self.top) + "^V" + str(self.bottom)
 
+
+
+def get_center(vehicles: list):
+  length = len(vehicles)
+  assert(length > 0)
+  center = length//2
+  xsort = sorted(vehicles, key=lambda x: x.x)
+  ysort = sorted(vehicles, key=lambda x: x.y)
+  return Unit(None, xsort[center].x, ysort[center].y)
+
+def get_square(vehicles: list):
+  maxx = 0
+  maxy = 0
+  minx = 1000
+  miny = minx
+  for v in vehicles:
+    if v.x < minx:
+      minx = v.x
+    if v.x > maxx:
+      maxx = v.x
+    if v.y < miny:
+      miny = v.y
+    if v.y > maxy:
+      maxy = v.y
+  return Area(minx, maxx, miny, maxy)
+
+def normalize_angle(angle):
+  while angle > pi:
+    angle -= 2*pi
+  while angle < -pi:
+    angle += 2*pi
+  return angle
+
+def get_angle_between(a: Unit, b: Unit):
+  return atan2((a.y - b.y), (a.x - b.x))
+
 class TaggedDict(dict):
   def __init__(self, data):
     dict.__init__(self)
@@ -59,6 +95,7 @@ class TaggedDict(dict):
 class Vehicles(TaggedDict):
   def __init__(self, world: World):
     self.me = world.get_my_player().id
+    self.selected = set()
     self.opponent = world.get_opponent_player().id
     self.by_player = defaultdict(lambda: set())
     self.by_type = defaultdict(lambda: set())
@@ -89,13 +126,18 @@ class Vehicles(TaggedDict):
       if self[i.id].x != i.x or self[i.id].y != i.y:
         self.updated.add(i.id)
       self[i.id].update(i)
-      health = i.durability / self[i.id].max_durability
       if i.id in self.by_player[self.me]:
+        if i.selected:
+          self.selected.add(i.id)
+        else:
+          self.selected.discard(i.id)
         newgroups = set(i.groups)
         fullgroups = set(self.by_group)
         for g in i.groups:
+          #print(str(i.id) + " added to group " + str(g))
           self.by_group.setdefault(g, set()).add(i.id)
         for g in fullgroups - newgroups:
+          #print(str(i.id) + " removed from group " + str(g))
           self.by_group[g].discard(i.id)
       if i.durability == 0:
         self.pop(i.id, None)
@@ -105,20 +147,11 @@ class Vehicles(TaggedDict):
           s.discard(i.id)
         for s in self.by_group.values():
           s.discard(i.id)
-      elif health < 0.6:
+        self.selected.discard(i.id)
+      elif i.durability / self[i.id].max_durability < 0.6:
         self.damaged.add(i.id)
-      elif health > 0.99:
+      else:
         self.damaged.discard(i.id)
-
-def normalize_angle(angle):
-  while angle > pi:
-    angle -= 2*pi
-  while angle < -pi:
-    angle += 2*pi
-  return angle
-
-def get_angle_between(a: Unit, b: Unit):
-  return atan2((a.y - b.y), (a.x - b.x))
 
 class Facilities(TaggedDict):
   def __init__(self, world: World):
@@ -156,29 +189,111 @@ class WorldState:
     self.vehicles.update(world)
     self.facilities.update(world)
 
-def get_center(vehicles: list):
-  length = len(vehicles)
-  assert(length > 0)
-  center = length//2
-  xsort = sorted(vehicles, key=lambda x: x.x)
-  ysort = sorted(vehicles, key=lambda x: x.y)
-  return Unit(None, xsort[center].x, ysort[center].y)
+class Action:
+  def __init__(self,  action: ActionType = ActionType.NONE):
+    self.action = action
+  def resolve(self,  move: Move,  ws: WorldState, world: World):
+    move.action = self.action
 
-def get_square(vehicles: list):
-  maxx = 0
-  maxy = 0
-  minx = 1000
-  miny = minx
-  for v in vehicles:
-    if v.x < minx:
-      minx = v.x
-    if v.x > maxx:
-      maxx = v.x
-    if v.y < miny:
-      miny = v.y
-    if v.y > maxy:
-      maxy = v.y
-  return Area(minx, maxx, miny, maxy)
+class Event:
+  #: Action
+  def __init__(self):
+   pass
+  def at_move_end():
+    pass
+  def after():
+    pass
+
+class MoveAction(Action):
+  def __init__(self,  position_obtainer: callable):
+    ## position obtainer should return the Unit of target position in absolute coordinates
+    Action.__init__(self,  ActionType.MOVE)
+    self.position_obtainer = position_obtainer
+  def resolve(self,  move: Move,  ws: WorldState,  w: World):
+    Action.resolve(move,  ws,  w)
+    position = self.position_obtainer(ws,  w)
+    current_position = get_center(ws.vehicles.resolve(ws.vehicles.selected))
+    move.x = position.x - current_position.x
+    move.y = position.y - current_position.y
+
+class RotateAction(Action):
+  def __init__(self, epicenter_obtainer: callable):
+    ## epicenter_obtainer should return tuple of center Unit and angle
+    Action.__init__(self, ActionType.ROTATE)
+    self.epicenter_obtainer = epicenter_obtainer
+  def resolve(self, move: Move,  ws: WorldState, w: World):
+    Action.resolve(self,  move,  ws,  w)
+    epicenter = self.epicenter_obtainer(ws,  w)
+    move.x = epicenter[0].x
+    move.y = epicenter[0].y
+    move.angle = epicenter[1]
+
+class Selector(Action):
+  def __init__(self,  area: Area,  group: int = -1, vtype: VehicleType = -1,  action = ActionType.CLEAR_AND_SELECT):
+    Action.__init__(self, action)
+    self.area = area
+    self.vehicle_type = vtype
+    self.group = group
+
+  def to_set(self,  prev: set,  vehicles: Vehicles):
+    if self.group > 0:
+      result = vehicles.by_group[self.group]
+    else:
+      result = vehicles.in_area(self.area) & vehicles.by_player[vehicles.me]
+      if self.vehicle_type > 0:
+        result &= vehicles.by_type[self.vehicle_type]
+    if self.action == ActionType.CLEAR_AND_SELECT:
+      return result
+    elif self.action == ActionType.ADD_TO_SELECTION:
+      return result | prev
+    elif self.action == ActionType.DESELECT:
+      return prev - result
+
+  def resolve(self,  move: Move,  ws: WorldState, world: World):
+    Action.resolve(self,  move,  ws,  world)
+    move.left = self.area.left
+    move.right = self.area.right
+    move.top = self.area.top
+    move.bottom = self.area.bottom
+    move.group = self.group
+    move.vehicle_type = self.vehicle_type
+
+class ActionChain:
+  counter = 0
+  queue = list() # List of Actions
+  last_selection = set()
+  def __init__(self):
+    pass
+  def select(self,  area: Area, group: int = -1, vtype: VehicleType = -1):
+    selector = Selector(area,  group,  vtype,  ActionType.CLEAR_AND_SELECT)
+    self.queue.append(selector)
+    return self
+  def add_to_select(self,  area: Area, group: int = -1, vtype: VehicleType = -1):
+    selector = Selector(area,  group,  vtype,  ActionType.ADD_TO_SELECTION)
+    self.queue.append(selector)
+    return self
+  def remove_from_select(self,  area: Area, group: int = -1, vtype: VehicleType = -1):
+    selector = Selector(area,  group,  vtype,  ActionType.DESELECT)
+    self.queue.append(selector)
+    return self
+  def move(self,  position_obtainer: callable):
+    ## returns move_end event
+    action = MoveAction(position_obtainer)
+    self.queue.append(action)
+    return self
+  def rotate(self,  epicenter_obtainer: callable):
+    self.queue.append(RotateAction(epicenter_obtainer))
+    return self
+  def nuke(self):
+    return self
+  def resolve(self, move: Move, ws: WorldState, world: World):
+    if len(self.queue) <= self.counter:
+      return True
+    current_action = self.queue[self.counter]
+    self.last_selection = ws.vehicles.selected
+    current_action.resolve(move,  ws,  world)
+    self.counter += 1
+
 
 def fill_flag(name: str):
   def do_fill(s: MyStrategy, w: World, g: Game, m: Move):
@@ -235,6 +350,15 @@ def wait(ticks: int):
     s.waiter = w.tick_index + counter
   return do_wait
 
+def after(ticks: int, actions: list):
+  def add_event(s: MyStrategy, w: World, g: Game, m: Move):
+    target_tick = w.tick_index + ticks
+    def event(ss: MyStrategy, ww: World, tt = target_tick):
+      if ww.tick_index >= tt:
+        ss.action_queue = deque(actions) + ss.action_queue
+    s.events.append(event)
+  return add_event
+
 def clusterize(ipoints: list, thresh: float = 10, kgrid: int = 10):
   ## Rough clasterization algorithm. No idea if it works
   ## returns set of clusters. each cluster is set of point numbers in original
@@ -268,7 +392,7 @@ def clusterize(ipoints: list, thresh: float = 10, kgrid: int = 10):
       attach_to = set()
       for np in nears:
         npoint = points[np]
-        distance_sq = (point.x - npoint.x)**2 + (point.y - npoint.y)**2 
+        distance_sq = (point.x - npoint.x)**2 + (point.y - npoint.y)**2
         if distance_sq < thresh**2:
           ## We can also take all near points instead of checking distance
           ## if we want better performance
@@ -336,6 +460,7 @@ def select_vehicles(area: Area, vtype: VehicleType = None, group: int = 0,
   return do_select
 
 def hurricane(group: int):
+  name = "hurricaned:" + str(group)
   def do_hurricane(s, w:World, g: Game, m: Move):
     vs = s.worldstate.vehicles
     pv = vs.by_group[group]
@@ -343,23 +468,26 @@ def hurricane(group: int):
     #print("Hurricane!")
     #print(mya)
     epicenter = get_center(myv)
-    result = deque([
-      select_vehicles(s.full_area, group = group),
-      scale(epicenter, 0.1),
-      wait(30),
-      select_vehicles(s.full_area, group = group),
-      rotate(pi/2, epicenter),
-      wait(30),
-      select_vehicles(s.full_area, group = group),
-      scale(epicenter, 0.1),
-      wait(150),
-      select_vehicles(s.full_area, group = group),
-      rotate(-pi/4, epicenter),
-      wait(30),
-      select_vehicles(s.full_area, group = group),
-      scale(epicenter, 0.1),
-      wait(150),
-    ])
+    def scale_hur():
+      return [
+        select_vehicles(s.full_area, group = group),
+        scale(epicenter, 0.1),
+      ]
+    def rotate_hur(angle: float):
+      return [
+        select_vehicles(s.full_area, group = group),
+        rotate(angle, epicenter),
+      ]
+    result = deque(
+      scale_hur() +
+      [
+        after(30, rotate_hur(pi/2)),
+        after(60, scale_hur()),
+        after(90, rotate_hur(-pi/2)),
+        after(120, scale_hur()),
+        after(150, [fill_flag(name)]),
+      ]
+    )
     s.action_queue = result + s.action_queue
   return do_hurricane
 
@@ -439,7 +567,7 @@ def tight(group: set):
     pv = vs.by_player[vs.me]
     actualgroup = group & pv
     def each(i, partarea, fullarea):
-      target = Unit(None, 0, (1 - 2 * i) * 1000)
+      #target = Unit(None, 0, (1 - 2 * i) * 1000)
       center = fullarea.get_center()
       return deque([
         #select_vehicles(partarea),
@@ -455,9 +583,8 @@ def initial_shuffle():
   ## Shuffles initially spawned groups of units into one
   ## Units should be initially set in one line
   ## Returns a closure to place into MyStrategy.action_queue
-  tightflag = "tighted"
   def do_shuffle(s: MyStrategy, w: World, g: Game, m: Move):
-    vs = s.worldstate.vehicles
+    pass
   return do_shuffle
 
 def do_shuffle(ss, w: World, g: Game, m: Move):
@@ -495,7 +622,7 @@ def do_shuffle(ss, w: World, g: Game, m: Move):
     vs = s.worldstate.vehicles
     theformation = Formation(s, vs.by_player[vs.me], "formation_done")
     s.formations.append(theformation)
-    s.action_queue.appendleft(at_flag("grouped:formation_done", 1, deque([theformation.setdistance(300)])))
+    s.action_queue.appendleft(at_flag("grouped:formation_done", 1, deque([theformation.setdistance(200)])))
   fifth_turn = deque([
     when_done,
     #at_flag("grouped", 1, deque([fill_flag("formation_done")])),
@@ -813,6 +940,8 @@ class Formation:
   ATTACK = 1
   MOVING = 2
   FLEEING = 3
+  NUKING = 4
+  HUNTING = 5
   def __init__(self, strategy, units: set, name: str):
     ## This method queues the necessary moves to create new formation
     ## area is the area where units for formation are placed
@@ -875,11 +1004,9 @@ class Formation:
     for d in range(len(self.densities)):
       density = self.densities[d]
       if density and density < criticaldensity:
-        def event_to_hurricane(s, w: World, gr = d):
-          s.action_queue.append(hurricane(self.grounds[gr]))
-          s.action_queue.append(remove_homeostate)
-          return True
-        strategy.events.append(event_to_hurricane)
+        print(d,  ": ",  density,  " < ",  criticaldensity)
+        strategy.action_queue.append(hurricane(self.grounds[d]))
+        strategy.action_queue.append(at_flag("hurricaned:" + str(d),  1,  deque([remove_homeostate])))
         self.homeostate = True
     pass
 
@@ -896,6 +1023,7 @@ class Formation:
         targetshift = Unit(None, dx, dy)
         result.append(select_vehicles(s.full_area, group = self.grounds[i]))
         result.append(move(targetshift))
+        result.append(at_move_end(self.grounds[i],  deque([fill_flag("distance_set:" + str(self.grounds[i]))])))
       s.action_queue = deque(result) + s.action_queue
     return do_set
 
@@ -910,7 +1038,7 @@ class Formation:
   def rotate_to(self, strategy, target: Unit):
     def do_rotate(s: MyStrategy, w: World, g: Game, m: Move):
       angle_to_target = get_angle_between(self.center, target)
-      angle_to_rotate = normalize_angle(angle_to_taget - self.direction)
+      angle_to_rotate = normalize_angle(angle_to_target - self.direction)
       strategy.action_queue.appendleft(
         self.select(strategy),
         do_and_check(rotate(angle_to_rotate, self.center),
@@ -927,9 +1055,9 @@ class Formation:
                                    (self.center.y+target.y)/2)
       else:
         eye_of_attack = self.center
-      s.action_queue.appendleft(rotate(-pi, eye_of_rotation))
+      s.action_queue.appendleft(rotate(-pi, eye_of_attack))
       s.action_queue.appendleft(select_vehicles(group=self.grounds[0]))
-      s.action_queue.appendleft(rotate(pi, eye_of_rotation))
+      s.action_queue.appendleft(rotate(pi, eye_of_attack))
       s.action_queue.appendleft(select_vehicles(group=self.grounds[1]))
     return do_attack
 
