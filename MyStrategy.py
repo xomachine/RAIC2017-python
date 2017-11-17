@@ -439,7 +439,7 @@ def tight(group: set):
     pv = vs.by_player[vs.me]
     actualgroup = group & pv
     def each(i, partarea, fullarea):
-      target = Unit(None, 0, (1 - 2 * i) * 1000)
+      #target = Unit(None, 0, (1 - 2 * i) * 1000)
       center = fullarea.get_center()
       return deque([
         #select_vehicles(partarea),
@@ -455,9 +455,10 @@ def initial_shuffle():
   ## Shuffles initially spawned groups of units into one
   ## Units should be initially set in one line
   ## Returns a closure to place into MyStrategy.action_queue
-  tightflag = "tighted"
+  #tightflag = "tighted"
   def do_shuffle(s: MyStrategy, w: World, g: Game, m: Move):
-    vs = s.worldstate.vehicles
+    #vs = s.worldstate.vehicles
+    pass
   return do_shuffle
 
 def do_shuffle(ss, w: World, g: Game, m: Move):
@@ -910,7 +911,7 @@ class Formation:
   def rotate_to(self, strategy, target: Unit):
     def do_rotate(s: MyStrategy, w: World, g: Game, m: Move):
       angle_to_target = get_angle_between(self.center, target)
-      angle_to_rotate = normalize_angle(angle_to_taget - self.direction)
+      angle_to_rotate = normalize_angle(angle_to_target - self.direction)
       strategy.action_queue.appendleft(
         self.select(strategy),
         do_and_check(rotate(angle_to_rotate, self.center),
@@ -927,9 +928,9 @@ class Formation:
                                    (self.center.y+target.y)/2)
       else:
         eye_of_attack = self.center
-      s.action_queue.appendleft(rotate(-pi, eye_of_rotation))
+      s.action_queue.appendleft(rotate(-pi, eye_of_attack))
       s.action_queue.appendleft(select_vehicles(group=self.grounds[0]))
-      s.action_queue.appendleft(rotate(pi, eye_of_rotation))
+      s.action_queue.appendleft(rotate(pi, eye_of_attack))
       s.action_queue.appendleft(select_vehicles(group=self.grounds[1]))
     return do_attack
 
