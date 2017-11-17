@@ -449,7 +449,7 @@ def tight(group: set):
     pv = vs.by_player[vs.me]
     actualgroup = group & pv
     def each(i, partarea, fullarea):
-      target = Unit(None, 0, (1 - 2 * i) * 1000)
+      #target = Unit(None, 0, (1 - 2 * i) * 1000)
       center = fullarea.get_center()
       return deque([
         #select_vehicles(partarea),
@@ -535,15 +535,16 @@ def do_shuffle(ss, w: World, g: Game, m: Move):
     #select_vehicles(ss.full_area),
     #rotate(-pi/2, Unit(None, central.right + fragment/2, mya.top + fragment*2))
   def halfrotate(i, a, f):
-    if i == 0:
+    if i == 1:
       return deque()
-    else:
-      rcenter = f.get_center()
-      rcenter.x = f.left - 1 # minus unit radius
-      return deque([select_vehicles(a), rotate(pi, rcenter)])
+    elif i == 0:
+      rcenter = Unit(None, f.right + 1,  a.bottom + 1) # minus unit radius
+    elif i == 2:
+      rcenter = Unit(None, f.left - 1,  a.top - 1) # minus unit radius
+    return deque([select_vehicles(a), rotate(pi, rcenter)])
   fifth_turn = deque([
     at_flag("rerotated", 1, deque([fill_flag("formation_done")])),
-    devide(vss.by_group[1], halfrotate, 2, "rerotated")
+    devide(vss.by_group[1], halfrotate, 3, "rerotated")
    ])
   fourth_turn = (do_and_check(tight(pv), "tighted", pv) +
     deque([at_flag("tighted", 1, fifth_turn)]))
@@ -724,7 +725,7 @@ def move_to_enemies(gr: int, max_speed: float):
       return # some patroling action might be inserted later
     clusters = clusterize(enemies, thresh = 20)
     aviaingroup = len(myg & aviasupport)
-    allmine = len(myg | aviasupport)
+    #allmine = len(myg | aviasupport)
     groundmine = len(my)
     least = get_center(enemies)
     value = 500
@@ -861,7 +862,7 @@ def kill_or_flee():
     vs = s.worldstate.vehicles
     epicenter = Unit(None, enemy.next_nuclear_strike_x,
                      enemy.next_nuclear_strike_y)
-    radius = game.tactical_nuclear_strike_radius + 10
+    radius = g.tactical_nuclear_strike_radius + 10
     enemies = vs.resolve(vs.by_player[vs.opponent])
     clusters = clusterize(enemies)
     navigator = enemy.next_nuclear_strike_vehicle_id
