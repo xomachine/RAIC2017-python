@@ -1,0 +1,56 @@
+from math import pi,  atan2
+from model.Unit import Unit
+
+class Area:
+  def __init__(self, l: float, r: float, t: float, b: float):
+    self.left = l
+    self.top = t
+    self.right = r
+    self.bottom = b
+  def from_units(units: list):
+    result = Area(1000, 0, 1000, 0)
+    for v in units:
+      if v.x < result.left:
+        result.left = v.x
+      if v.x > result.right:
+        result.right = v.x
+      if v.y < result.top:
+        result.top = v.y
+      if v.y > result.bottom:
+        result.bottom = v.y
+    return result
+  def get_center(self):
+    return Unit(None, (self.left + self.right)/2, (self.top + self.bottom)/2)
+  def mirror(self):
+    return Area(self.top, self.bottom, self.left, self.right)
+  def copy(self):
+    return Area(self.left, self.right, self.top, self.bottom)
+  def is_inside(self, point):
+    return (point.x <= self.right and point.x >= self.left and
+            point.y >= self.top and point.y <= self.bottom)
+  def area(self):
+    width = (self.right - self.left)
+    height = (self.bottom - self.top)
+    return  width * height + abs(width - height)**2
+  def __str__(self):
+    return str(self.left) + " <> " + str(self.right) + ":" + str(self.top) + "^V" + str(self.bottom)
+
+def normalize_angle(angle):
+  while angle > pi:
+    angle -= 2*pi
+  while angle < -pi:
+    angle += 2*pi
+  return angle
+
+def get_angle_between(a: Unit, b: Unit):
+  return atan2((a.y - b.y), (a.x - b.x))
+
+
+def get_center(vehicles: list):
+  length = len(vehicles)
+  assert(length > 0)
+  center = length//2
+  xsort = sorted(vehicles, key=lambda x: x.x)
+  ysort = sorted(vehicles, key=lambda x: x.y)
+  return Unit(None, xsort[center].x, ysort[center].y)
+
