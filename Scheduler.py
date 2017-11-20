@@ -19,6 +19,10 @@ class Event:
   def after():
     pass
 
+class NukeAction(Action):
+  def __init__(self):
+    pass
+
 class MoveAction(Action):
   def __init__(self,  position_obtainer: callable):
     ## position obtainer should return the Unit of target position in absolute coordinates

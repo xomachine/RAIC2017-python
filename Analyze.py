@@ -1,7 +1,23 @@
 from model.World import World
 from model.FacilityType import FacilityType
+from model.Game import Game
+from model.VehicleType import VehicleType
 from collections import defaultdict
 from Utils import Area
+
+FLYERS = 0
+GROUNDERS = 1
+typebyname = {
+  VehicleType.ARRV: "arrv",
+  VehicleType.FIGHTER: "fighter",
+  VehicleType.HELICOPTER: "helicopter",
+  VehicleType.IFV: "ifv",
+  VehicleType.TANK: "tank",
+}
+movables = [VehicleType.IFV, VehicleType.ARRV, VehicleType.FIGHTER]
+types = [[VehicleType.HELICOPTER, VehicleType.FIGHTER],
+         [VehicleType.TANK, VehicleType.IFV, VehicleType.ARRV]]
+
 class TaggedDict(dict):
   def __init__(self, data):
     dict.__init__(self)
@@ -26,7 +42,7 @@ class Vehicles(TaggedDict):
     self.by_player = defaultdict(set)
     self.by_type = defaultdict(set)
     self.by_group = defaultdict(set)
-    self.by_cluster = clusterdict(lambda x: self.clusterize(self.by_player[x]))
+    self.by_cluster_dict = dict()
     self.updated = set()
     self.damaged = set()
     TaggedDict.__init__(self, world.new_vehicles)
@@ -35,16 +51,21 @@ class Vehicles(TaggedDict):
       self.by_type[i.type].add(i.id)
       self.updated.add(i.id)
 
-  def clasterize(self, units: set, thresh = 10, griddensity = 10):
+  def by_cluster(self, pid: int):
+    if not (pid in self.by_cluster_dict):
+      self.by_cluster_dict[pid] = self.clusterize(self.by_player[pid])
+    return self.by_cluster_dict[pid]
+
+  def clusterize(self, units: set, thresh = 10, griddensity = 10):
     ## returns set of clusters
     ## every cluster is a frozen set of vehicle ids
-    clusters = list()
+    clusters = set()
     grid = defaultdict(lambda: defaultdict(lambda:set()))
     # sort units by grid cells
     for id in units:
       unit = self[id]
-      gridx = unit.x // griddensity
-      gridy = unit.y // griddensity
+      gridx = int(unit.x // griddensity)
+      gridy = int(unit.y // griddensity)
       grid[gridx][gridy].add(id)
     for id in units:
       assigned = False
@@ -60,8 +81,8 @@ class Vehicles(TaggedDict):
         newcluster.add(id)
         # now lets check all units in neighbour grid cells if
         # they are may be attached to our cluster
-        gridx = unit.x // griddensity
-        gridy = unit.y // griddensity
+        gridx = int(unit.x // griddensity)
+        gridy = int(unit.y // griddensity)
         for gx in range(gridx-1, gridx+2):
           for gy in range(gridy-1, gridy+2): # 9 iterations
             for nid in grid[gx][gy]:
@@ -91,6 +112,7 @@ class Vehicles(TaggedDict):
     return result
 
   def update(self, world: World):
+    self.by_cluster_dict = dict()
     for i in world.new_vehicles:
       if not (i.id in self):
         self[i.id] = i
@@ -157,11 +179,48 @@ class Facilities(TaggedDict):
 
 
 class WorldState:
-  def __init__(self, world: World):
+  def __init__(self, world: World, game: Game):
     self.vehicles = Vehicles(world)
     self.facilities = Facilities(world)
+    self.get_opponent_and_me(world)
+    self.calculate_effectiveness(game)
+
+  def calculate_effectiveness(self, game: Game):
+    self.effectiveness = dict()
+    def construct(t, ending = "durability", vt = None):
+      if ending == "durability" or vt is None:
+        name = typebyname[a] + "_durability"
+      else:
+        clas = None
+        if vt in types[FLYERS]:
+          clas = "_aerial_"
+        else:
+          clas =  "_ground_"
+        name = typebyname[t] + clas + ending
+      if hasattr(game, name):
+        return getattr(game, name)
+      return 0
+    def positive(a):
+      if a < 0:
+        return 0
+      return a
+    for a in typebyname.keys():
+      self.effectiveness[a] = dict()
+      for d in typebyname.keys():
+        self.effectiveness[a][d] = (
+          positive(construct(a, "damage", d)-construct(d, "defence", a))
+          /construct(d))
+
+  def get_opponent_and_me(self, w: World):
+    if w.players[0].me:
+      self.me = w.players[0]
+      self.opponent = w.players[1]
+    else:
+      self.me = w.players[1]
+      self.opponent = w.players[0]
 
   def update(self, world: World):
     self.vehicles.update(world)
     self.facilities.update(world)
+    self.get_opponent_and_me(world)
 

@@ -1,5 +1,7 @@
 from math import pi,  atan2
 from model.Unit import Unit
+from model.VehicleType import VehicleType
+from model.Game import Game
 
 class Area:
   def __init__(self, l: float, r: float, t: float, b: float):
@@ -46,7 +48,8 @@ def get_angle_between(a: Unit, b: Unit):
   return atan2((a.y - b.y), (a.x - b.x))
 
 
-def get_center(vehicles: list):
+def get_center(v: list):
+  vehicles = list(v)
   length = len(vehicles)
   assert(length > 0)
   center = length//2
@@ -54,3 +57,20 @@ def get_center(vehicles: list):
   ysort = sorted(vehicles, key=lambda x: x.y)
   return Unit(None, xsort[center].x, ysort[center].y)
 
+def get_min_speed(game: Game, vehicles, units: set):
+  slowname = get_slowest(vehicles, units)
+  slowspeed = getattr(game, slowname + "_speed")
+  if slowname in ["tank",  "ifv"]:
+    return slowspeed * game.swamp_terrain_speed_factor
+  else:
+    return slowspeed * game.rain_weather_speed_factor
+
+def get_slowest(vehicles, units: set):
+  if vehicles.by_type[VehicleType.TANK] & units:
+    return "tank"
+  elif (vehicles.by_type[VehicleType.IFV] | vehicles.by_type[VehicleType.ARRV]) & units:
+    return "ifv"
+  elif vehicles.by_type[VehicleType.HELICOPTER] & units:
+    return "helicopter"
+  else:
+    return "fighter"
