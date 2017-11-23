@@ -347,7 +347,9 @@ def do_shuffle(ss, w: World, g: Game, m: Move):
 #    s.action_queue.appendleft(at_flag("grouped:formation_done", 1, deque([theformation.setdistance(200)])))
   fifth_turn = deque([
     #when_done,
-    fill_flag("formation_done")
+    select_vehicles(ss.full_area),
+    rotate(pi/4, mya.get_center()),
+    at_move_end(pv, deque([fill_flag("formation_done")]))
     #at_flag("grouped", 1, deque([fill_flag("formation_done")])),
     #devide(vss.by_group[1], halfrotate, 2, "grouped")
    ])

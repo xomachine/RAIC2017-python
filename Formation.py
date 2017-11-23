@@ -4,7 +4,7 @@ from model.World import World
 from model.Game import Game
 from model.Player import Player
 from Analyze import WorldState,  Vehicles
-from Utils import Area
+from Utils import Area,  get_center
 
 
 class Formation:
@@ -14,6 +14,8 @@ class Formation:
   def select(self, m: Move):
     m.action = ActionType.CLEAR_AND_SELECT
     m.group = self.group
+  def position(self, vehicles: Vehicles):
+    return get_center(vehicles.resolve(self.units(vehicles)))
   def area(self, vehicles: Vehicles):
     return Area.from_units(vehicles.resolve(self.units(vehicles)))
   def units(self, vehicles: Vehicles):
@@ -34,13 +36,15 @@ class Formation:
         if m.action != ActionType.NONE:
           resetflag = True
 
-from Behaviors import NuclearAlert,  Chase
+from Behaviors import NuclearAlert,  Chase, KeepTogether, Nuke
 
 class GroundFormation(Formation):
   def __init__(self,  groupnum: int):
     Formation.__init__(self, groupnum)
     self.decision_list = [
-      NuclearAlert(self), 
+      NuclearAlert(self),
+      KeepTogether(self),
+      Nuke(self),
       Chase(self)
     ]
 
