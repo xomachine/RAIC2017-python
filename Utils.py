@@ -33,7 +33,7 @@ class Area:
   def area(self):
     width = (self.right - self.left)
     height = (self.bottom - self.top)
-    return  width * height + abs(width - height)**2
+    return  width * height + abs(width - height)
   def __str__(self):
     return str(self.left) + " <> " + str(self.right) + ":" + str(self.top) + "^V" + str(self.bottom)
 

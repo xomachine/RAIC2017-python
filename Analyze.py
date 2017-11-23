@@ -134,22 +134,29 @@ class Vehicles(TaggedDict):
         unit = self[i.id]
         if unit.x != i.x or unit.y != i.y:
           self.updated.add(i.id)
+          unit.x = i.x
+          unit.y = i.y
         if i.id in mine:
-          if i.selected:
-            self.selected.add(i.id)
+          if i.selected != unit.selected:
+            if i.selected:
+              self.selected.add(i.id)
+            else:
+              self.selected.discard(i.id)
+          if len(i.groups) != len(unit.groups):
+            newgroups = frozenset(i.groups)
+            oldgroups = frozenset(unit.groups)
+            for g in newgroups - oldgroups:
+              self.by_group[g].add(i.id)
+            for g in oldgroups - newgroups:
+              self.by_group[g].discard(i.id)
+            unit.groups = i.groups
+        if i.durability != unit.durability:
+          if i.durability / unit.max_durability < 0.55:
+            self.damaged.add(i.id)
           else:
-            self.selected.discard(i.id)
-          newgroups = frozenset(i.groups)
-          oldgroups = frozenset(unit.groups)
-          for g in newgroups - oldgroups:
-            self.by_group[g].add(i.id)
-          for g in oldgroups - newgroups:
-            self.by_group[g].discard(i.id)
-        if i.durability / self[i.id].max_durability < 0.55:
-          self.damaged.add(i.id)
-        else:
-          self.damaged.discard(i.id)
-        unit.update(i)
+            self.damaged.discard(i.id)
+          unit.durability = i.durability
+        #unit.update(i)
 
 class Facilities(TaggedDict):
   def __init__(self, world: World):

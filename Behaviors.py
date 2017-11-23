@@ -72,7 +72,6 @@ class Chase(Behavior):
     if self.cellx == cellx and self.celly == celly:
       return
     # TODO: simple pathfinding
-    print("Setting action")
     m.action = ActionType.MOVE
     m.x = destination.x - formationcenter.x
     m.y = destination.y - formationcenter.y
