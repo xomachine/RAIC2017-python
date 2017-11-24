@@ -143,9 +143,10 @@ class Vehicles(TaggedDict):
               self.by_group[g].discard(i.id)
             unit.groups = i.groups
         if i.durability != unit.durability:
-          if i.durability / unit.max_durability < 0.7:
+          durpercent = i.durability / unit.max_durability
+          if durpercent < 0.7:
             self.damaged.add(i.id)
-          else:
+          elif durpercent > 0.8:
             self.damaged.discard(i.id)
           unit.durability = i.durability
         #unit.update(i)
