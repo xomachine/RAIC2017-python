@@ -1,22 +1,9 @@
 from model.World import World
 from model.FacilityType import FacilityType
 from model.Game import Game
-from model.VehicleType import VehicleType
 from collections import defaultdict
-from Utils import Area
+from Utils import Area,  FLYERS, types, typebyname
 
-FLYERS = 0
-GROUNDERS = 1
-typebyname = {
-  VehicleType.ARRV: "arrv",
-  VehicleType.FIGHTER: "fighter",
-  VehicleType.HELICOPTER: "helicopter",
-  VehicleType.IFV: "ifv",
-  VehicleType.TANK: "tank",
-}
-movables = [VehicleType.IFV, VehicleType.ARRV, VehicleType.FIGHTER]
-types = [[VehicleType.HELICOPTER, VehicleType.FIGHTER],
-         [VehicleType.TANK, VehicleType.IFV, VehicleType.ARRV]]
 
 class TaggedDict(dict):
   def __init__(self, data):
@@ -56,11 +43,12 @@ class Vehicles(TaggedDict):
       self.by_cluster_dict[pid] = self.clusterize(self.by_player[pid])
     return self.by_cluster_dict[pid]
 
-  def clusterize(self, units: set, thresh = 10, griddensity = 10):
+  def clusterize(self, units: set, thresh = 10, griddensity = 15):
     ## returns set of clusters
     ## every cluster is a frozen set of vehicle ids
     clusters = set()
-    grid = defaultdict(lambda: defaultdict(lambda:set()))
+    threshhood = thresh*thresh
+    grid = defaultdict(lambda: defaultdict(set))
     # sort units by grid cells
     for id in units:
       unit = self[id]
@@ -88,21 +76,26 @@ class Vehicles(TaggedDict):
             for nid in grid[gx][gy]:
               # triple for loop eeew!
               # now lets check distance to neighbour point
-              distance = unit.get_distance_to_unit(self[nid])
-              if distance < thresh:
+              unid = self[nid]
+              distance = unit.get_squared_distance_to(unid.x, unid.y)
+              if distance < threshhood:
                 newcluster.add(nid)
         # our new cluster contains both of new points and probably points
         # from other clusters. lets merge those clusters with new and remove them
         # after the fact
+        #print("New cluster contains: ",  len(newcluster))
         to_remove = set()
         for c in clusters:
           if c & newcluster:
+            #print("Detected intersection with ",  c,  ", merging")
             newcluster |= c
             to_remove.add(c)
+        #print("Will be removed:", to_remove)
         clusters -= to_remove
         # after all lets add our new clusters to others
         clusters.add(frozenset(newcluster))
-      return clusters
+    #print("Final clusters:",  clusters)
+    return clusters
 
   def in_area(self, a: Area):
     result = set()
@@ -137,11 +130,10 @@ class Vehicles(TaggedDict):
           unit.x = i.x
           unit.y = i.y
         if i.id in mine:
-          if i.selected != unit.selected:
-            if i.selected:
-              self.selected.add(i.id)
-            else:
-              self.selected.discard(i.id)
+          if i.selected:
+            self.selected.add(i.id)
+          else:
+            self.selected.discard(i.id)
           if len(i.groups) != len(unit.groups):
             newgroups = frozenset(i.groups)
             oldgroups = frozenset(unit.groups)
@@ -151,7 +143,7 @@ class Vehicles(TaggedDict):
               self.by_group[g].discard(i.id)
             unit.groups = i.groups
         if i.durability != unit.durability:
-          if i.durability / unit.max_durability < 0.55:
+          if i.durability / unit.max_durability < 0.7:
             self.damaged.add(i.id)
           else:
             self.damaged.discard(i.id)

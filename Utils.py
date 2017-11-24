@@ -2,6 +2,21 @@ from math import pi,  atan2
 from model.Unit import Unit
 from model.VehicleType import VehicleType
 from model.Game import Game
+from model.Vehicle import Vehicle
+from model.World import World
+
+FLYERS = 0
+GROUNDERS = 1
+typebyname = {
+  VehicleType.ARRV: "arrv",
+  VehicleType.FIGHTER: "fighter",
+  VehicleType.HELICOPTER: "helicopter",
+  VehicleType.IFV: "ifv",
+  VehicleType.TANK: "tank",
+}
+movables = [VehicleType.IFV, VehicleType.ARRV, VehicleType.FIGHTER]
+types = [[VehicleType.HELICOPTER, VehicleType.FIGHTER],
+         [VehicleType.TANK, VehicleType.IFV, VehicleType.ARRV]]
 
 class Area:
   def __init__(self, l: float, r: float, t: float, b: float):
@@ -33,7 +48,7 @@ class Area:
   def area(self):
     width = (self.right - self.left)
     height = (self.bottom - self.top)
-    return  width * height + abs(width - height)
+    return  width * height + abs(width - height)**2
   def __str__(self):
     return str(self.left) + " <> " + str(self.right) + ":" + str(self.top) + "^V" + str(self.bottom)
 
@@ -47,6 +62,19 @@ def normalize_angle(angle):
 def get_angle_between(a: Unit, b: Unit):
   return atan2((a.y - b.y), (a.x - b.x))
 
+def get_vision_range(w: World, vehicle: Vehicle,  game: Game):
+  grid = 32
+  vehicle_col = int(vehicle.x // grid)
+  vehicle_row = int(vehicle.y // grid)
+  if vehicle.type in types[GROUNDERS]:
+    dct = ["plain",  "swamp", "forest"]
+    terrain = w.terrain_by_cell_x_y[vehicle_col][vehicle_row]
+    attrname = dct[terrain] + "_terrain_vision_factor"
+  else:
+    dct = ["clear",  "cloud", "rain"]
+    weather = w.weather_by_cell_x_y[vehicle_col][vehicle_row]
+    attrname = dct[weather] + "_weather_vision_factor"
+  return vehicle.vision_range * getattr(game, attrname)
 
 def get_center(v: list):
   vehicles = list(v)

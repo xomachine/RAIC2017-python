@@ -8,7 +8,8 @@ from model.Unit import Unit
 from model.VehicleType import VehicleType
 #from model.Vehicle import Vehicle
 from model.FacilityType import FacilityType
-from Analyze import WorldState, types,  GROUNDERS, FLYERS, movables, typebyname,  Vehicles
+from Analyze import WorldState,  Vehicles
+from Utils import types,  GROUNDERS, FLYERS, movables, typebyname
 from collections import deque
 from Utils import Area,  get_center
 from functools import reduce
@@ -348,8 +349,9 @@ def do_shuffle(ss, w: World, g: Game, m: Move):
   fifth_turn = deque([
     #when_done,
     select_vehicles(ss.full_area),
-    rotate(pi/4, mya.get_center()),
+    rotate(pi/4, Unit(None, central.left, mya.bottom)),
     at_move_end(pv, deque([fill_flag("formation_done")]))
+#    fill_flag("formation_done")
     #at_flag("grouped", 1, deque([fill_flag("formation_done")])),
     #devide(vss.by_group[1], halfrotate, 2, "grouped")
    ])
