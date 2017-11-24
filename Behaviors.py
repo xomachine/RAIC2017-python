@@ -95,8 +95,8 @@ class KeepTogether(Behavior):
     area = self.holder.area(ws.vehicles).area()
     if area == 0:
       return False
-    if self.maxticks == None:
-      self.maxticks = 5/get_min_speed(game, ws.vehicles, self.holder.units(ws.vehicles))
+    if self.maxticks is None:
+      self.maxticks = 4/get_min_speed(game, ws.vehicles, self.holder.units(ws.vehicles))
     amount = len(self.holder.units(ws.vehicles))
     density = amount / area
     return density <= criticaldensity
@@ -128,7 +128,7 @@ class Repair(Behavior):
   def on_tick(self, ws: WorldState, world: World, player: Player, game: Game):
     self.gridsize = 5
     units = self.holder.units(ws.vehicles)
-    if len(ws.vehicles.damaged & units)/len(units) > 0.35:
+    if len(ws.vehicles.damaged & units)/len(units) > 0.3:
       self.my_repairs = ws.vehicles.by_player[ws.vehicles.me] & ws.vehicles.by_type[VehicleType.ARRV]
       if len(self.my_repairs) == 0:
         return False
@@ -199,8 +199,11 @@ class Chase(Behavior):
       clusterdistance = clustercenter.get_distance_to_unit(formationcenter)
       #clusterangle = get_angle_between(clustercenter,  formationcenter)
       #clustersize = len(cluster)
-      advantage = calculate(ws.effectiveness, ws.vehicles,  self.holder.units(ws.vehicles), c)
-      value = (advantage + 1000 * int(p.remaining_nuclear_strike_cooldown_ticks == 0))/(clusterdistance/100)
+      advantage = calculate(ws.effectiveness, ws.vehicles,  self.holder.units(ws.vehicles) - ws.vehicles.damaged, c - ws.vehicles.damaged)
+      if clusterdistance == 0:
+        value = 0
+      else:
+        value = (advantage + 1000 * int(p.remaining_nuclear_strike_cooldown_ticks == 0))/(clusterdistance)
       #value = clusterdistance/10 + clustersize - advantage
       #print("Cluster of size ",  clustersize, ", we have advantage ",  advantage)
       if value > maxvalue:

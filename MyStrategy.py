@@ -95,7 +95,8 @@ class MyStrategy:
           f.tick(self.worldstate, world, me, game, move)
       if move.action and move.action != ActionType.NONE:
         self.actionsRemaining -= 1
-        self.no_priority_change += 1
+        if move.action != ActionType.CLEAR_AND_SELECT:
+          self.no_priority_change += 1
       else:
         for i,  f in enumerate(self.formations):
           if i == self.priority:
