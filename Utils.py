@@ -76,6 +76,19 @@ def get_vision_range(w: World, vehicle: Vehicle,  game: Game):
     attrname = dct[weather] + "_weather_vision_factor"
   return vehicle.vision_range * getattr(game, attrname)
 
+def from_edge(w: World, position: Unit):
+  x = 0
+  y = 0
+  if position.x < 50:
+    x = 50
+  elif position.x + 50 > w.width:
+    x = -50
+  if position.y < 50:
+    y = 50
+  elif position.y + 50 > w.height:
+    y = -50
+  return Unit(None, x, y)
+
 def get_center(v: list):
   vehicles = list(v)
   length = len(vehicles)

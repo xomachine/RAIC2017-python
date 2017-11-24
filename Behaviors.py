@@ -7,7 +7,7 @@ from model.ActionType import ActionType
 from model.VehicleType import VehicleType
 from Formation import Formation
 from Analyze import WorldState
-from Utils import get_center, get_min_speed, get_vision_range
+from Utils import get_center, get_min_speed, get_vision_range,  from_edge
 from deadcode import calculate
 from math import pi
 
@@ -210,10 +210,18 @@ class Chase(Behavior):
           break
     if maxvalue <=0:
       print("Minimal cluster was not found")
-      m.action = ActionType.MOVE
-      m.x = formationcenter.x - clustercenter.x
-      m.y = formationcenter.y - clustercenter.y
-      m.max_speed = self.max_speed
+      fromedge = from_edge(w, formationcenter)
+      x = formationcenter.x - clustercenter.x + fromedge.x
+      y = formationcenter.y - clustercenter.y + fromedge.y
+      cellx = x//self.gridsize
+      celly = y//self.gridsize
+      if cellx != self.cellx or celly != self.celly:
+        m.action = ActionType.MOVE
+        m.x = x
+        m.y = y
+        m.max_speed = self.max_speed
+        self.cellx = cellx
+        self.celly = celly
       return
     cellx = destination.x // self.gridsize
     celly = destination.y // self.gridsize
