@@ -527,17 +527,17 @@ def calculate(eff: dict, v: Vehicles, game: Game, my: set, enemies: set):
   the_signature = hash((tuple(mylens), tuple(enlens)))
   if the_signature in valcache:
     return valcache[the_signature]
-  print("My lengths:",  mylens)
-  print("Enemy lengths:",  enlens)
+  #print("My lengths:",  mylens)
+  #print("Enemy lengths:",  enlens)
   for mt in typebyname.keys():
     mylen = mylens[mt]
     if mylen > 0:
-      print("Calculation for " + typebyname[mt])
+      #print("Calculation for " + typebyname[mt])
       for et in typebyname.keys():
         enlen = enlens[et]
         if enlen > 0:
           corr = (mylen * eff[mt][et] - enlen * eff[et][mt])
-          print("...and " + typebyname[et] + " = " + str(corr))
+          #print("...and " + typebyname[et] + " = " + str(corr))
           result += corr
   accesses += 1
   if accesses > 1000:
