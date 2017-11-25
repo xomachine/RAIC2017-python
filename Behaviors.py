@@ -7,7 +7,7 @@ from model.ActionType import ActionType
 from model.VehicleType import VehicleType
 from Formation import Formation
 from Analyze import WorldState
-from Utils import get_center, get_min_speed, get_vision_range,  from_edge
+from Utils import get_center, get_min_speed, get_vision_range,  from_edge, is_loose
 from deadcode import calculate
 from math import pi
 
@@ -92,14 +92,9 @@ class KeepTogether(Behavior):
     self.current_action = ActionType.NONE
     self.currentactionticks = 0
   def on_tick(self, ws: WorldState, world: World, player: Player, game: Game):
-    area = self.holder.area(ws.vehicles).area()
-    if area == 0:
-      return False
     if self.maxticks is None:
       self.maxticks = 4/get_min_speed(game, ws.vehicles, self.holder.units(ws.vehicles))
-    amount = len(self.holder.units(ws.vehicles))
-    density = amount / area
-    return density <= criticaldensity
+    return is_loose(list(ws.vehicles.resolve(self.holder.units(ws.vehicles))))
 
   def act(self, ws: WorldState, w: World, p: Player, g: Game, m: Move):
     if self.currentactionticks <= 0:
