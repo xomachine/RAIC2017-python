@@ -536,7 +536,7 @@ def calculate(eff: dict, v: Vehicles, game: Game, my: set, enemies: set):
       for et in typebyname.keys():
         enlen = enlens[et]
         if enlen > 0:
-          corr = (mylen * eff[mt][et] - enlen * eff[et][mt])
+          corr = (mylen * eff[mt][et] - enlen * eff[et][mt] + (mylens[0] - enlens[0]) * 0.1)
           #print("...and " + typebyname[et] + " = " + str(corr))
           result += corr
   accesses += 1
