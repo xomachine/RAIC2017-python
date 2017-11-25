@@ -19,7 +19,7 @@ fuzz = 1
 criticaldensity = 1 / 25  # how tight should the vehicles stay
 
 def fill_flag(name: str):
-  def do_fill(s: MyStrategy, w: World, g: Game, m: Move):
+  def do_fill(s, w: World, g: Game, m: Move):
     #print("Filling flag: " + name)
     if name in s.flags:
       s.flags[name] += 1
@@ -29,7 +29,7 @@ def fill_flag(name: str):
 
 def at_flag(name: str, count: int, actions: deque):
   ## Adds actions to current queue if flag filled
-  def event(s: MyStrategy, w: World, c: int = count):
+  def event(s, w: World, c: int = count):
     if (not (name in s.flags)) or s.flags[name] >= c:
       #print("Got " + str(c) + " in " + name)
       ## If dict key does not exist, it means that previous handler just
@@ -39,7 +39,7 @@ def at_flag(name: str, count: int, actions: deque):
         s.flags.pop(name)
       return True
     return False
-  def do_add_event(s: MyStrategy, w: World, g: Game, m: Move):
+  def do_add_event(s, w: World, g: Game, m: Move):
     if not (name in s.flags):
       s.flags[name] = 0
     #print("Waiting " + str(count) + " on flag: " + name)
@@ -48,7 +48,7 @@ def at_flag(name: str, count: int, actions: deque):
 
 def at_move_end(watchers: set, actions: deque):
   name = "move_end:" + str(hash(frozenset(watchers)))
-  def do_eventme(s: MyStrategy, w: World):
+  def do_eventme(s, w: World):
     intersect = s.worldstate.vehicles.updated & watchers
     if (not (name in s.flags)) or s.flags[name] >= 2:
       #print("Move ended for " + name)
@@ -61,7 +61,7 @@ def at_move_end(watchers: set, actions: deque):
     else:
       s.flags[name] = 0
     return False
-  def do_waitme(s: MyStrategy, w: World, g: Game, m: Move):
+  def do_waitme(s, w: World, g: Game, m: Move):
     s.events.append(do_eventme)
     #print("Waiting move end for set:" + name)
     s.flags[name] = 0
@@ -69,14 +69,14 @@ def at_move_end(watchers: set, actions: deque):
 
 def wait(ticks: int):
   counter = ticks
-  def do_wait(s: MyStrategy, w: World, g: Game, m: Move):
+  def do_wait(s, w: World, g: Game, m: Move):
     s.waiter = w.tick_index + counter
   return do_wait
 
 def after(ticks: int, actions: list):
-  def add_event(s: MyStrategy, w: World, g: Game, m: Move):
+  def add_event(s, w: World, g: Game, m: Move):
     target_tick = w.tick_index + ticks
-    def event(ss: MyStrategy, ww: World, tt = target_tick):
+    def event(ss, ww: World, tt = target_tick):
       if ww.tick_index >= tt:
         ss.action_queue = deque(actions) + ss.action_queue
     s.events.append(event)
@@ -134,7 +134,7 @@ def clusterize(ipoints: list, thresh: float = 10, kgrid: int = 10):
   return clusters
 
 def rotate(angle: float, center: Unit, max_speed: float = 0.0):
-  def do_rotate(s: MyStrategy, w: World, g: Game, m: Move):
+  def do_rotate(s, w: World, g: Game, m: Move):
     m.action = ActionType.ROTATE
     m.angle = angle
     m.max_angular_speed = max_speed
@@ -143,7 +143,7 @@ def rotate(angle: float, center: Unit, max_speed: float = 0.0):
   return do_rotate
 
 def move(destination: Unit, max_speed: float = 0.0):
-  def do_move(s: MyStrategy, w: World, g: Game, m: Move):
+  def do_move(s, w: World, g: Game, m: Move):
     m.action = ActionType.MOVE
     m.x = destination.x
     m.y = destination.y
@@ -152,7 +152,7 @@ def move(destination: Unit, max_speed: float = 0.0):
   return do_move
 
 def group(gnum: int, action: range(4, 7) = ActionType.ASSIGN):
-  def do_group(s: MyStrategy, w: World, g: Game, m: Move):
+  def do_group(s, w: World, g: Game, m: Move):
     m.action = action
     m.group = gnum
     if action == ActionType.ASSIGN:
@@ -162,7 +162,7 @@ def group(gnum: int, action: range(4, 7) = ActionType.ASSIGN):
   return do_group
 
 def scale(center: Unit, factor: float):
-  def do_scale(s: MyStrategy, w: World, g: Game, m: Move):
+  def do_scale(s, w: World, g: Game, m: Move):
     m.action = ActionType.SCALE
     m.factor = factor
     m.x = center.x
@@ -171,7 +171,7 @@ def scale(center: Unit, factor: float):
 
 def select_vehicles(area: Area, vtype: VehicleType = None, group: int = 0,
                     action: range(1, 4) = ActionType.CLEAR_AND_SELECT):
-  def do_select(s: MyStrategy, w: World, g: Game, m: Move, a = area):
+  def do_select(s, w: World, g: Game, m: Move, a = area):
     m.action = action
     #print("Selecting: " + str(a))
     m.left = a.left - fuzz
@@ -224,7 +224,7 @@ def devide(unitset: set, each: callable, parts: int, name: str, horizontal = Fal
   halfparts = parts // 2
   ordered = sorted(range(parts), key = lambda x: abs(x-halfparts))
   tmpname = "devision:" + str(hash(frozenset(unitset)))
-  def do_devide(s: MyStrategy, w: World, g: Game, m: Move):
+  def do_devide(s, w: World, g: Game, m: Move):
     vs = s.worldstate.vehicles
     # to avoid non existing units we using intersection with
     # all players units
@@ -251,7 +251,7 @@ def devide(unitset: set, each: callable, parts: int, name: str, horizontal = Fal
   return do_devide
 
 def nuke_it(target: Unit, navigator: int):
-  def do_nuke(s: MyStrategy, w: World, g: Game, m: Move):
+  def do_nuke(s, w: World, g: Game, m: Move):
     m.action = ActionType.TACTICAL_NUCLEAR_STRIKE
     m.x = target.x
     m.y = target.y
@@ -285,7 +285,7 @@ def do_and_check(action, flag: str, group: set):
 def tight(group: set):
   ## Tights the group
   name = "devided:" + str(hash(frozenset(group)))
-  def do_tight(s: MyStrategy, w: World, g: Game, m: Move):
+  def do_tight(s, w: World, g: Game, m: Move):
     vs = s.worldstate.vehicles
     pv = vs.by_player[vs.me]
     actualgroup = group & pv
@@ -306,7 +306,7 @@ def initial_shuffle():
   ## Shuffles initially spawned groups of units into one
   ## Units should be initially set in one line
   ## Returns a closure to place into MyStrategy.action_queue
-  def do_shuffle(s: MyStrategy, w: World, g: Game, m: Move):
+  def do_shuffle(s, w: World, g: Game, m: Move):
     pass
   return do_shuffle
 
