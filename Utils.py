@@ -1,4 +1,4 @@
-from math import pi,  atan2, tan
+from math import pi,  atan2, sin, sqrt
 from model.Unit import Unit
 from model.VehicleType import VehicleType
 from model.Game import Game
@@ -90,33 +90,27 @@ def from_edge(w: World, position: Unit):
     y = -w.height/(w.height - position.y)
   return Unit(None, x, y)
 
-magicarea = tan(pi/16)/2
-
+magicarea = sin(pi/8)/2
 def is_loose(vehicles: list):
-  sectors = [set(), set(), set(), set()]
-  crosses = [set(), set(), set(), set()]
+  global magicarea
+  sectors = [0] * 16
+  order = (13, 9, 1, 5, 4, 0, 8, 12, 14, 10, 2, 6, 7, 3, 11, 15, 13)
   unitscenter = get_center(vehicles)
   for i, v in enumerate(vehicles):
-    relv = Unit(None, v.x - unitscenter.x, v.y - unitscenter.y)
-    sectornum = int(relv.y<0)*2 + int(relv.x>0)
-    crossnum = int(abs(relv.x)>abs(relv.y))*2+int(abs(relv.x-relv.y) > 2*min(abs(relv.x), abs(relv.y)))
-    sectors[sectornum].add(i)
-    crosses[crossnum].add(i)
+    relx = v.x - unitscenter.x
+    rely = v.y - unitscenter.y
+    arelx = relx*relx
+    arely = rely*rely
+    sectornum = int(arelx>arely)*8+int(max(arelx, arely) > 4*min(arelx, arely))*4 + int(rely<0)*2 + int(relx>0)
+    sectors[sectornum] = max(sqrt(arelx + arely) + 2, sectors[sectornum])
   area = 0
-  for sect in sectors:
-    for cross in crosses:
-      roi = sect & cross
-      maxdistance = 0
-      for vn in roi:
-        v = vehicles[vn]
-        distance = unitscenter.get_squared_distance_to(v.x,  v.y)
-        if distance > maxdistance:
-          maxdistance = distance
-      if maxdistance == 0:
-        continue
-      area += maxdistance * magicarea
+  #print("Sectors:", sectors)
+  #print("Magic:", magicarea)
+  for i in range(16):
+    area += sectors[order[i]] * sectors[order[i+1]]
+  area *= magicarea
   #print("Area:", area,", Amount:",  len(vehicles),  ", Density:",  len(vehicles)/area)
-  if area > 0 and len(vehicles)/area < 1/8:
+  if area > 0 and len(vehicles)/area < 0.045:
     return True
   return False
 
