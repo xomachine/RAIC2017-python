@@ -114,25 +114,24 @@ class KeepTogether(Behavior):
     return is_loose(list(ws.vehicles.resolve(self.holder.units(ws.vehicles))))
 
   def act(self, ws: WorldState, w: World, p: Player, g: Game, m: Move):
-    if self.current_action != ActionType.SCALE:
-      if self.currentactionticks <= 0:
-        target = self.holder.position(ws.vehicles)
-        self.currentactionticks = self.maxticks
-        m.x = target.x
-        m.y = target.y
+    if self.currentactionticks <= 0:
+      target = self.holder.position(ws.vehicles)
+      self.currentactionticks = self.maxticks
+      m.x = target.x
+      m.y = target.y
+      if self.current_action != ActionType.SCALE:
         m.action = ActionType.SCALE
         m.factor = 0.1
         self.current_action = ActionType.SCALE
       else:
-        self.currentactionticks -= 1
-    elif not (self.holder.units(ws.vehicles) & ws.vehicles.updated):
-        target = self.holder.position(ws.vehicles)
         m.action = ActionType.ROTATE
         self.lastangle *= -1
-        m.x = target.x
-        m.y = target.y
         m.angle = self.lastangle
         self.current_action = ActionType.ROTATE
+    elif self.current_action == ActionType.SCALE and not (self.holder.units(ws.vehicles) & ws.vehicles.updated):
+      self.currentactionticks -= self.maxticks//2
+    else:
+      self.currentactionticks -= 1
 
 class Repair(Behavior):
   def __init__(self, holder):
@@ -204,9 +203,7 @@ class Chase(Behavior):
     if not (self.holder.units(ws.vehicles) & ws.vehicles.updated):
       self.no_update += 1
     if self.no_update > 10:
-      self.cellx = -1
-      self.celly = -1
-      self.no_update = 0
+      self.reset()
     return True
 
   def reset(self):
