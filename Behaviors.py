@@ -114,23 +114,25 @@ class KeepTogether(Behavior):
     return is_loose(list(ws.vehicles.resolve(self.holder.units(ws.vehicles))))
 
   def act(self, ws: WorldState, w: World, p: Player, g: Game, m: Move):
-    if self.currentactionticks <= 0:
-      self.currentactionticks = self.maxticks
-      # change action
-      target = self.holder.position(ws.vehicles)
-      m.x = target.x
-      m.y = target.y
-      if self.current_action == ActionType.SCALE:
-        m.action = ActionType.ROTATE
-        self.lastangle *= -1
-        m.angle = self.lastangle
-        self.current_action = ActionType.ROTATE
-      else:
+    if self.current_action != ActionType.SCALE:
+      if self.currentactionticks <= 0:
+        target = self.holder.position(ws.vehicles)
+        self.currentactionticks = self.maxticks
+        m.x = target.x
+        m.y = target.y
         m.action = ActionType.SCALE
         m.factor = 0.1
         self.current_action = ActionType.SCALE
-    else:
-      self.currentactionticks -= 1
+      else:
+        self.currentactionticks -= 1
+    elif not (self.holder.units(ws.vehicles) & ws.vehicles.updated):
+        target = self.holder.position(ws.vehicles)
+        m.action = ActionType.ROTATE
+        self.lastangle *= -1
+        m.x = target.x
+        m.y = target.y
+        m.angle = self.lastangle
+        self.current_action = ActionType.ROTATE
 
 class Repair(Behavior):
   def __init__(self, holder):
