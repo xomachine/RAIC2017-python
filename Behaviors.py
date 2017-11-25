@@ -39,11 +39,14 @@ class DontStuck(Behavior):
     m.action = ActionType.MOVE
 
 class Nuke(Behavior):
+  def __init__(self, holder):
+    Behavior.__init__(self, holder)
+    self.stopped = False
   def on_tick(self, ws: WorldState, world: World, player: Player, game: Game):
     if player.next_nuclear_strike_vehicle_id > 0:
       self.acting = True
       return True
-    if player.remaining_nuclear_strike_cooldown_ticks > 0:
+    if player.remaining_nuclear_strike_cooldown_ticks > 0 or NuclearAlert.on_tick(self, ws, world, player, game):
       self.acting = False
       return False
     formationcenter = get_center(ws.vehicles.resolve(self.holder.units(ws.vehicles)))
@@ -59,7 +62,17 @@ class Nuke(Behavior):
     #TODO: Use minimal vision range
     return mindistance < game.fighter_vision_range
 
+  def reset(self):
+    Behavior.reset(self)
+    self.stopped = False
+
   def act(self, ws: WorldState, w: World, p: Player, g: Game, m: Move):
+    if not self.stopped:
+      m.action = ActionType.MOVE
+      m.x = 0
+      m.y = 0
+      self.stopped = True
+      return
     if self.acting:
       #print("Already nuking")
       return

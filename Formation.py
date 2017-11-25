@@ -77,10 +77,10 @@ class AerialFormation(Formation):
     Formation.__init__(self, groupnum)
     print("Made aerial formation for group ",  groupnum)
     self.decision_list = [
+      Nuke(self),
       NuclearAlert(self),
       Repair(self),
       KeepTogether(self),
-      Nuke(self),
       Chase(self)
     ]
 
@@ -89,9 +89,9 @@ class GroundFormation(Formation):
     print("Made ground formation for group ",  groupnum)
     Formation.__init__(self, groupnum)
     self.decision_list = [
+      Nuke(self),
       NuclearAlert(self),
       KeepTogether(self),
-      Nuke(self),
       Chase(self)
     ]
 
