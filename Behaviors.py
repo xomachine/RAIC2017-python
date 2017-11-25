@@ -43,7 +43,7 @@ class Nuke(Behavior):
     Behavior.__init__(self, holder)
     self.stopped = False
   def on_tick(self, ws: WorldState, world: World, player: Player, game: Game):
-    if player.next_nuclear_strike_vehicle_id > 0:
+    if player.next_nuclear_strike_vehicle_id in self.holder.units(ws.vehicles):
       self.acting = True
       return True
     if player.remaining_nuclear_strike_cooldown_ticks > 0 or NuclearAlert.on_tick(self, ws, world, player, game):
