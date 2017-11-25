@@ -102,6 +102,7 @@ def is_loose(vehicles: list):
     crossnum = int(abs(relv.x)>abs(relv.y))*2+int(abs(relv.x-relv.y) > 2*min(abs(relv.x), abs(relv.y)))
     sectors[sectornum].add(i)
     crosses[crossnum].add(i)
+  area = 0
   for sect in sectors:
     for cross in crosses:
       roi = sect & cross
@@ -112,14 +113,11 @@ def is_loose(vehicles: list):
         if distance > maxdistance:
           maxdistance = distance
       if maxdistance == 0:
-        #print("Zero!")
         continue
-      length = len(roi)
-      area = maxdistance * magicarea
-      density = length/area
-      #print("Length:", length, ", Area:", area,", Density:", density)
-      if density < 1/14:
-        return True
+      area += maxdistance * magicarea
+  #print("Area:", area,", Amount:",  len(vehicles),  ", Density:",  len(vehicles)/area)
+  if area > 0 and len(vehicles)/area < 1/8:
+    return True
   return False
 
 def get_center(v: list):
