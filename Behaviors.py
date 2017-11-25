@@ -59,12 +59,26 @@ class Nuke(Behavior):
       if clusterdistance < mindistance and clusterdistance > game.tactical_nuclear_strike_radius * 0.9:
         mindistance = clusterdistance
         self.target = clustercenter
-    #TODO: Use minimal vision range
-    return mindistance < game.fighter_vision_range
+    if self.target is None or mindistance > game.fighter_vision_range:
+      return False
+    nearest = -1
+    #mindistance = 2000
+    for i in (self.holder.units(ws.vehicles)):
+      distance = self.target.get_distance_to_unit(ws.vehicles[i])
+      vis_range = get_vision_range(world, ws.vehicles[i],  game)
+      if vis_range * 0.95 > distance and not i in ws.vehicles.damaged:
+        nearest = i
+        break
+    if nearest < 0:
+      print("Cannot find navigator")
+      return False
+    self.navigator = nearest
+    return True
 
   def reset(self):
     Behavior.reset(self)
     self.stopped = False
+    self.navigator = None
 
   def act(self, ws: WorldState, w: World, p: Player, g: Game, m: Move):
     if not self.stopped:
@@ -76,23 +90,10 @@ class Nuke(Behavior):
     if self.acting:
       #print("Already nuking")
       return
-    nearest = -1
-    mindistance = 2000
-    for i in (self.holder.units(ws.vehicles) - ws.vehicles.damaged):
-      distance = self.target.get_distance_to_unit(ws.vehicles[i])
-      if distance < mindistance:
-        mindistance = distance
-        nearest = i
-        vis_range = get_vision_range(w, ws.vehicles[i],  g)
-        if vis_range * 0.95 > mindistance:
-          break
-    if nearest < 0:
-      print("Cannot find navigator")
-      return
     m.action = ActionType.TACTICAL_NUCLEAR_STRIKE
     m.x = self.target.x
     m.y = self.target.y
-    m.vehicle_id = nearest
+    m.vehicle_id = self.navigator
     self.acting = True
 
 criticaldensity = 1/35
