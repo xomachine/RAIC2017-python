@@ -223,13 +223,13 @@ class Chase(Behavior):
       clusterdistance = clustercenter.get_distance_to_unit(formationcenter)
       #clusterangle = get_angle_between(clustercenter,  formationcenter)
       #clustersize = len(cluster)
-      advantage = calculate(ws.effectiveness, ws.vehicles,  self.holder.units(ws.vehicles) - ws.vehicles.damaged, c - ws.vehicles.damaged)
+      advantage = calculate(ws.effectiveness, ws.vehicles, g, self.holder.units(ws.vehicles), c)
       if clusterdistance == 0:
-        value = 0.1
+        value = 0.000001
       else:
         value = (advantage + 1000 * int(p.remaining_nuclear_strike_cooldown_ticks == 0))/(clusterdistance)
       #value = clusterdistance/10 + clustersize - advantage
-      #print("Cluster of size ",  clustersize, ", we have advantage ",  advantage)
+      #print("Cluster of size ",  clustersize, ", we have advantage ",  advantage,  ", so the value is ",  value)
       if value > maxvalue:
         destination = clustercenter
         maxvalue = value

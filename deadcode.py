@@ -503,20 +503,49 @@ def shuffle(s):
   return (deque([at_flag("compacted", 1, deque([do_shuffle]))]) +
           initial_compact(s))
 
-def calculate(eff: dict, v: Vehicles, my: set, enemies: set):
+valcache = dict()
+accesses = 0
+def calculate(eff: dict, v: Vehicles, game: Game, my: set, enemies: set):
   result = 0.0
+  global valcache
+  global accesses
   if not enemies  or not my:
     return len(my) - len(enemies)
+  mylens = [0] * 5
+  enlens = [0] * 5
+  for t in typebyname.keys():
+    maxdur = getattr(game, typebyname[t] + "_durability")
+    mot = my & v.by_type[t]
+    if mot:
+      #mysumdur = len(mot) * maxdur
+      for vh in v.resolve(mot):
+        mylens[t] += vh.durability
+      mylens[t] /= maxdur
+    eot = enemies & v.by_type[t]
+    if eot:
+      #ensumdur = maxdur * len(enemies)
+      for vh in v.resolve(eot):
+        enlens[t] += vh.durability
+      enlens[t] /= maxdur
+  the_signature = hash((tuple(mylens), tuple(enlens)))
+  if the_signature in valcache:
+    return valcache[the_signature]
+  print("My lengths:",  mylens)
+  print("Enemy lengths:",  enlens)
   for mt in typebyname.keys():
-    mylen = len(my & v.by_type[mt])
+    mylen = mylens[mt]
     if mylen > 0:
-      #print("Calculation for " + typebyname[mt])
+      print("Calculation for " + typebyname[mt])
       for et in typebyname.keys():
-        enlen = len(enemies & v.by_type[et])
+        enlen = enlens[et]
         if enlen > 0:
           corr = (mylen * eff[mt][et] - enlen * eff[et][mt])
-          #print("...and " + typebyname[et] + " = " + str(corr))
+          print("...and " + typebyname[et] + " = " + str(corr))
           result += corr
+  accesses += 1
+  if accesses > 1000:
+    valcache = dict()
+  valcache[the_signature] = result
   return result
 
 def by_xy(distance: float, deltas: Unit):
