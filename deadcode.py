@@ -2,18 +2,15 @@
 from model.ActionType import ActionType
 from model.Game import Game
 from model.Move import Move
-from model.Player import Player
 from model.World import World
 from model.Unit import Unit
 from model.VehicleType import VehicleType
-#from model.Vehicle import Vehicle
-from model.FacilityType import FacilityType
-from Analyze import WorldState,  Vehicles
+from Analyze import Vehicles
 from Utils import types,  GROUNDERS, FLYERS, movables, typebyname
 from collections import deque
 from Utils import Area,  get_center
 from functools import reduce
-from math import pi,  copysign,  sqrt
+from math import pi, sqrt
 fuzz = 1
 
 criticaldensity = 1 / 25  # how tight should the vehicles stay
