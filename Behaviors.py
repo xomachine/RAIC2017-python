@@ -40,6 +40,9 @@ class DontStuck(Behavior):
 
 class Nuke(Behavior):
   def on_tick(self, ws: WorldState, world: World, player: Player, game: Game):
+    if player.next_nuclear_strike_vehicle_id > 0:
+      self.acting = True
+      return True
     if player.remaining_nuclear_strike_cooldown_ticks > 0:
       self.acting = False
       return False
@@ -178,10 +181,23 @@ class Chase(Behavior):
     self.gridsize = gridsize
     self.cellx = -1
     self.celly = -1
+    self.no_update = 0
   def on_tick(self, ws: WorldState, world: World, player: Player, game: Game):
     if self.max_speed == 0:
       self.max_speed = get_min_speed(game, ws.vehicles, ws.vehicles.by_group[self.holder.group])
+    if not (self.holder.units(ws.vehicles) & ws.vehicles.updated):
+      self.no_update += 1
+    if self.no_update > 10:
+      self.cellx = -1
+      self.celly = -1
+      self.no_update = 0
     return True
+
+  def reset(self):
+    Behavior.reset(self)
+    self.no_update = 0
+    self.cellx = -1
+    self.celly = -1
 
   def act(self, ws: WorldState, w: World, p: Player, g: Game, m: Move):
     mine = ws.vehicles.resolve(self.holder.units(ws.vehicles))
@@ -196,7 +212,7 @@ class Chase(Behavior):
       #clustersize = len(cluster)
       advantage = calculate(ws.effectiveness, ws.vehicles,  self.holder.units(ws.vehicles) - ws.vehicles.damaged, c - ws.vehicles.damaged)
       if clusterdistance == 0:
-        value = 0
+        value = 0.1
       else:
         value = (advantage + 1000 * int(p.remaining_nuclear_strike_cooldown_ticks == 0))/(clusterdistance)
       #value = clusterdistance/10 + clustersize - advantage
