@@ -79,13 +79,14 @@ def get_vision_range(w: World, vehicle: Vehicle,  game: Game):
 def from_edge(w: World, position: Unit):
   x = 0
   y = 0
-  if position.x < 50:
+  tolerance = 100
+  if position.x < tolerance:
     x = w.width/position.x
-  elif position.x + 50 > w.width:
+  elif position.x + tolerance > w.width:
     x = -w.width/(w.width - position.x)
-  if position.y < 50:
+  if position.y < tolerance:
     y = w.height/position.y
-  elif position.y + 50 > w.height:
+  elif position.y + tolerance > w.height:
     y = -w.height/(w.height - position.y)
   return Unit(None, x, y)
 

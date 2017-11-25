@@ -505,6 +505,8 @@ def shuffle(s):
 
 def calculate(eff: dict, v: Vehicles, my: set, enemies: set):
   result = 0.0
+  if not enemies  or not my:
+    return len(my) - len(enemies)
   for mt in typebyname.keys():
     mylen = len(my & v.by_type[mt])
     if mylen > 0:
