@@ -83,8 +83,8 @@ class Nuke(Behavior):
   def act(self, ws: WorldState, w: World, p: Player, g: Game, m: Move):
     if not self.stopped:
       m.action = ActionType.MOVE
-      m.x = 0
-      m.y = 0
+      m.x = 0.1
+      m.y = 0.1
       self.stopped = True
       return
     if self.acting:
