@@ -502,22 +502,33 @@ def shuffle(s):
 
 valcache = dict()
 accesses = 0
-def calculate(eff: dict, v: Vehicles, game: Game, my: set, enemies: set):
+mycache = None
+cacheid = -1
+def calculate(eff: dict, v: Vehicles, game: Game, my: set, enemies: set, tick_id: int):
   result = 0.0
   global valcache
   global accesses
+  global mycache
+  global cacheid
   if not enemies  or not my:
     return len(my) - len(enemies)
-  mylens = [0] * 5
   enlens = [0] * 5
+  if cacheid == tick_id and not mycache is None:
+    mylens = mycache
+  else:
+    mylens = [0] * 5
+    for t in typebyname.keys():
+      maxdur = getattr(game, typebyname[t] + "_durability")
+      mot = my & v.by_type[t]
+      if mot:
+        #mysumdur = len(mot) * maxdur
+        for vh in v.resolve(mot):
+          mylens[t] += vh.durability
+        mylens[t] /= maxdur
+    mycache = mylens
+    cacheid = tick_id
   for t in typebyname.keys():
     maxdur = getattr(game, typebyname[t] + "_durability")
-    mot = my & v.by_type[t]
-    if mot:
-      #mysumdur = len(mot) * maxdur
-      for vh in v.resolve(mot):
-        mylens[t] += vh.durability
-      mylens[t] /= maxdur
     eot = enemies & v.by_type[t]
     if eot:
       #ensumdur = maxdur * len(enemies)
@@ -540,7 +551,7 @@ def calculate(eff: dict, v: Vehicles, game: Game, my: set, enemies: set):
           #print("...and " + typebyname[et] + " = " + str(corr))
           result += corr
   accesses += 1
-  if accesses > 1000:
+  if accesses > 10000:
     valcache = dict()
   valcache[the_signature] = result
   return result

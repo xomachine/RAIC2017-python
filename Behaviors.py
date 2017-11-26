@@ -223,7 +223,7 @@ class Chase(Behavior):
       clusterdistance = clustercenter.get_distance_to_unit(formationcenter)
       #clusterangle = get_angle_between(clustercenter,  formationcenter)
       #clustersize = len(cluster)
-      advantage = calculate(ws.effectiveness, ws.vehicles, g, self.holder.units(ws.vehicles), c)
+      advantage = calculate(ws.effectiveness, ws.vehicles, g, self.holder.units(ws.vehicles), c, w.tick_index + self.holder.group*100000)
       if clusterdistance == 0:
         value = 0.000001
       else:
@@ -236,7 +236,7 @@ class Chase(Behavior):
         if clusterdistance < 100:
           break
     if maxvalue <=0:
-      print("Minimal cluster was not found")
+      #print("Minimal cluster was not found")
       fromedge = from_edge(w, formationcenter)
       x = formationcenter.x - clustercenter.x + fromedge.x
       y = formationcenter.y - clustercenter.y + fromedge.y
