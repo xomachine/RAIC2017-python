@@ -43,10 +43,11 @@ class Vehicles(TaggedDict):
       self.by_cluster_dict[pid] = self.clusterize(self.by_player[pid])
     return self.by_cluster_dict[pid]
 
-  def clusterize(self, units: set, thresh = 10, griddensity = 15):
+  def clusterize(self, units: set, thresh = 10, griddensity = 12):
     ## returns set of clusters
     ## every cluster is a frozen set of vehicle ids
     clusters = set()
+    allclusters = set()
     threshhood = thresh*thresh
     grid = defaultdict(lambda: defaultdict(set))
     # sort units by grid cells
@@ -56,44 +57,47 @@ class Vehicles(TaggedDict):
       gridy = int(unit.y // griddensity)
       grid[gridx][gridy].add(id)
     for id in units:
-      assigned = False
+      #assigned = False
       # check if unit already in one of the clusters
+      if id in allclusters:
+        continue
+#      for c in clusters:
+#        if id in c:
+#          assigned = True
+#          break
+ #     if not assigned:
+      # if it is a standalone unit lets make new cluster for it
+      unit = self[id]
+      newcluster = set()
+      newcluster.add(id)
+      # now lets check all units in neighbour grid cells if
+      # they are may be attached to our cluster
+      gridx = int(unit.x // griddensity)
+      gridy = int(unit.y // griddensity)
+      for gx in range(gridx-1, gridx+2):
+        for gy in range(gridy-1, gridy+2): # 9 iterations
+          for nid in grid[gx][gy]:
+            # triple for loop eeew!
+            # now lets check distance to neighbour point
+            unid = self[nid]
+            distance = unit.get_squared_distance_to(unid.x, unid.y)
+            if distance < threshhood:
+              newcluster.add(nid)
+      # our new cluster contains both of new points and probably points
+      # from other clusters. lets merge those clusters with new and remove them
+      # after the fact
+      #print("New cluster contains: ",  len(newcluster))
+      to_remove = set()
       for c in clusters:
-        if id in c:
-          assigned = True
-          break
-      if not assigned:
-        # if it is a standalone unit lets make new cluster for it
-        unit = self[id]
-        newcluster = set()
-        newcluster.add(id)
-        # now lets check all units in neighbour grid cells if
-        # they are may be attached to our cluster
-        gridx = int(unit.x // griddensity)
-        gridy = int(unit.y // griddensity)
-        for gx in range(gridx-1, gridx+2):
-          for gy in range(gridy-1, gridy+2): # 9 iterations
-            for nid in grid[gx][gy]:
-              # triple for loop eeew!
-              # now lets check distance to neighbour point
-              unid = self[nid]
-              distance = unit.get_squared_distance_to(unid.x, unid.y)
-              if distance < threshhood:
-                newcluster.add(nid)
-        # our new cluster contains both of new points and probably points
-        # from other clusters. lets merge those clusters with new and remove them
-        # after the fact
-        #print("New cluster contains: ",  len(newcluster))
-        to_remove = set()
-        for c in clusters:
-          if c & newcluster:
-            #print("Detected intersection with ",  c,  ", merging")
-            newcluster |= c
-            to_remove.add(c)
-        #print("Will be removed:", to_remove)
-        clusters -= to_remove
-        # after all lets add our new clusters to others
-        clusters.add(frozenset(newcluster))
+        if c & newcluster:
+          #print("Detected intersection with ",  c,  ", merging")
+          newcluster |= c
+          to_remove.add(c)
+      #print("Will be removed:", to_remove)
+      clusters -= to_remove
+      # after all lets add our new clusters to others
+      clusters.add(frozenset(newcluster))
+      allclusters |= newcluster
     #print("Final clusters:",  clusters)
     return clusters
 
