@@ -38,7 +38,7 @@ class MyStrategy:
   def analyze(self, me: Player, world: World, game: Game):
     self.worldstate.update(world)
     facilities = self.worldstate.facilities
-    myccid = facilities.by_type[FacilityType.CONTROL_CENTER] & facilities.allies
+    myccid = facilities.by_type[FacilityType.CONTROL_CENTER] & facilities.by_player[me.id]
     self.actionsPerTick = (game.base_action_count +
       game.additional_action_count_per_control_center * len(myccid))
     if world.tick_index % 60 == 0:

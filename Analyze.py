@@ -157,29 +157,25 @@ class Vehicles(TaggedDict):
 
 class Facilities(TaggedDict):
   def __init__(self, world: World):
-    self.allies = set()
-    self.hostiles = set()
-    self.neutral = set()
     self.by_type = dict()
+    self.by_player = defaultdict(set)
     self.by_type[FacilityType.CONTROL_CENTER] = set()
     self.by_type[FacilityType.VEHICLE_FACTORY] = set()
     TaggedDict.__init__(self, world.facilities)
     self.me = world.get_my_player().id
+    self.neutral = -1
     self.opponent = world.get_opponent_player().id
+    self.update(world)
     for i in world.facilities:
-      (i.owner_player_id == self.me and self.allies or
-       i.owner_player_id == self.opponent and self.hostiles or
-       self.neutral).add(i.id)
       self.by_type[i.type].add(i.id)
 
   def update(self, world: World):
-    self.allies.clear()
-    self.hostiles.clear()
-    self.neutral.clear()
+    for i in [self.neutral, self.me, self.opponent]:
+      self.by_player[i].clear()
     for i in world.facilities:
-      (i.owner_player_id == self.me and self.allies or
-       i.owner_player_id == self.opponent and self.hostiles or
-       self.neutral).add(i.id)
+      self[i.id].vehicle_type = i.vehicle_type
+      self[i.id].production_progress = i.production_progress
+      self.by_player[i.owner_player_id].add(i.id)
 
 
 class WorldState:
