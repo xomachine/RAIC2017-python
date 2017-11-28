@@ -85,7 +85,7 @@ class MyStrategy:
           break
     elif self.actionsRemaining > 0:
       to_remove = set()
-      if type(self.priority) is int and self.no_priority_change < 10 and self.priority < len(self.formations):
+      if type(self.priority) is int and self.priority < len(self.formations):
         #print("Selecting again by priority:",  self.priority)
         f = self.formations[self.priority]
         if len(f.units(self.worldstate.vehicles)) == 0:
@@ -103,6 +103,7 @@ class MyStrategy:
             continue
           if len(f.units(self.worldstate.vehicles)) == 0:
             to_remove.add(i)
+            self.free_groups.add(f.group)
             continue
           f.tick(self.worldstate, world, me, game, move)
           if move.action and move.action != ActionType.NONE:
@@ -111,6 +112,8 @@ class MyStrategy:
             #print("Setting priority to:",  i)
             self.actionsRemaining -= 1
             break
+      if self.no_priority_change > 10:
+        self.priority = None
       if len(to_remove) > 0:
         for i in to_remove:
           if self.priority == i:
