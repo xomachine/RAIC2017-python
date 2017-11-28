@@ -76,6 +76,7 @@ class AerialFormation(Formation):
   def __init__(self, groupnum):
     Formation.__init__(self, groupnum)
     print("Made aerial formation for group ",  groupnum)
+    self.ground = False
     self.decision_list = [
       Nuke(self),
       NuclearAlert(self),
@@ -88,6 +89,7 @@ class GroundFormation(Formation):
   def __init__(self,  groupnum: int):
     print("Made ground formation for group ",  groupnum)
     Formation.__init__(self, groupnum)
+    self.ground = True
     self.decision_list = [
       Nuke(self),
       NuclearAlert(self),

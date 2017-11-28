@@ -3,6 +3,7 @@ from model.Game import Game
 from model.Move import Move
 from model.Player import Player
 from model.Unit import Unit
+from model.FacilityType import FacilityType
 from model.ActionType import ActionType
 from model.VehicleType import VehicleType
 from Formation import Formation
@@ -216,18 +217,30 @@ class Chase(Behavior):
     mine = ws.vehicles.resolve(self.holder.units(ws.vehicles))
     formationcenter = get_center(mine)
     maxvalue = 0
+    if self.holder.ground:
+      for f in (ws.facilities.by_player[ws.facilities.neutral] | ws.facilities.by_player[ws.facilities.opponent]):
+        facility = ws.facilities[f]
+        fcenter = Unit(None, facility.left+g.facility_width/2, facility.top + g.facility_height/2)
+        distance = fcenter.get_squared_distance_to(formationcenter.x, formationcenter.y)
+        if distance == 0:
+          distance = 1
+        value = 1500000/distance
+        if value > maxvalue:
+          maxvalue = value
+          destination = fcenter
+      #print("Selected facility as destination:",  maxvalue)
     for c in ws.vehicles.by_cluster(ws.vehicles.opponent):
       cluster = list(ws.vehicles.resolve(c))
       clustercenter = get_center(cluster)
       #clusterarea = Area.from_units(cluster)
-      clusterdistance = clustercenter.get_distance_to_unit(formationcenter)
+      clusterdistance = clustercenter.get_squared_distance_to(formationcenter.x, formationcenter.y)
       #clusterangle = get_angle_between(clustercenter,  formationcenter)
       #clustersize = len(cluster)
       advantage = calculate(ws.effectiveness, ws.vehicles, g, self.holder.units(ws.vehicles), c, w.tick_index + self.holder.group*100000)
       if clusterdistance == 0:
         value = 0.000001
       else:
-        value = (advantage + 1000 * int(p.remaining_nuclear_strike_cooldown_ticks == 0))/(clusterdistance)
+        value = (advantage + 1000 * int(p.remaining_nuclear_strike_cooldown_ticks == 0))**2/(clusterdistance)
       #value = clusterdistance/10 + clustersize - advantage
       #print("Cluster of size ",  clustersize, ", we have advantage ",  advantage,  ", so the value is ",  value)
       if value > maxvalue:
