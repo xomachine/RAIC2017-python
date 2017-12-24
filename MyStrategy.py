@@ -18,19 +18,22 @@ def set_production(fid, id: VehicleType):
     m.vehicle_type = id
     m.facility_id = fid
     print("set production:", fid)
-    s.flags.pop("enqueued_production:" + str(fid))
+    eprodname = "enqueued_production:" + str(fid)
+    if eprodname in s.flags:
+      s.flags.pop(eprodname)
   return do_set
 
-def make_formation(i,  j):
+def make_formation(ground = -1,  aerial = -1, fi = -1):
   def do_make(s, w: World, g: Game, m: Move):
     #print("Formation was made!")
-    if j > 0:
-      newaerial = AerialFormation(j)
+    if aerial > 0:
+      newaerial = AerialFormation(aerial)
       s.formations.append(newaerial)
-    new_formation = GroundFormation(i)
-    s.formations.append(new_formation)
-    if "formation:" + str(j) in s.flags:
-      s.flags.pop("formation:" + str(j))
+    if ground > 0:
+      new_formation = GroundFormation(ground)
+      s.formations.append(new_formation)
+    if "formation:" + str(fi) in s.flags:
+      s.flags.pop("formation:" + str(fi))
   return do_make
 
 class MyStrategy:
@@ -61,25 +64,47 @@ class MyStrategy:
     for i in self.worldstate.vehicles.by_group.values():
       ingroups |= i
     for fa in (self.worldstate.facilities.by_player[self.worldstate.facilities.me] & self.worldstate.facilities.by_type[FacilityType.VEHICLE_FACTORY]):
+      enprodname = "enqueued_production:" + str(fa)
       f = self.worldstate.facilities[fa]
       varea = Area(f.left, f.left + g.facility_width, f.top, f.top+g.facility_height)
       #print(f.vehicle_type, f.production_progress)
       inarea = self.worldstate.vehicles.in_area(varea) & self.worldstate.vehicles.by_player[self.worldstate.vehicles.me]
-      if f.vehicle_type is None and len(inarea) == 0 and not ("enqueued_production:" + str(fa) in self.flags):
-        self.flags["enqueued_production:" + str(fa)] = 1
+      if f.vehicle_type is None and len(inarea) == 0 and not (enprodname in self.flags):
+        self.flags[enprodname] = 1
         self.action_queue.append(set_production(fa, VehicleType.IFV))
         print("Enqueued production:", fa)
       #if inarea == 100 and not ("enqueued_production:" + str(f.id) in self.flags):
       #  self.flags["enqueued_production:" + str(f.id)] = 1
       #  self.action_queue.append(set_production(VehicleType.HELICOPTER))
-      if len(inarea - ingroups) == 100 and not ("formation:-" + str(f.id) in self.flags):
-        self.flags["formation:-" + str(f.id)] = 1
+      inareanogroups = len(inarea - ingroups)
+      jsetname = "justset:" + str(fa)
+      if inareanogroups > 0 and inareanogroups % 11 == 0 and not (enprodname in self.flags) and not (jsetname in self.flags):
+        self.flags[enprodname] = 1
+        self.flags[jsetname] = True
+        if f.vehicle_type == VehicleType.IFV:
+          self.action_queue.append(set_production(fa, VehicleType.ARRV))
+        elif f.vehicle_type == VehicleType.ARRV:
+          self.action_queue.append(set_production(fa, VehicleType.IFV))
+        elif f.vehicle_type == VehicleType.FIGHTER:
+          self.action_queue.append(set_production(fa, VehicleType.HELICOPTER))
+        elif f.vehicle_type == VehicleType.HELICOPTER:
+          self.action_queue.append(set_production(fa, VehicleType.FIGHTER))
+      elif inareanogroups % 11 != 0 and jsetname in self.flags:
+        self.flags.pop(jsetname)
+
+      if inareanogroups == 121 and not ("formation:" + str(f.id) in self.flags):
+        if f.vehicle_type in {VehicleType.IFV, VehicleType.ARRV}:
+          nexttype = VehicleType.FIGHTER
+        else:
+          nexttype = VehicleType.IFV
+        self.flags["formation:" + str(f.id)] = 1
         newgroup = self.free_groups.pop()
         self.action_queue += deque([
           select_vehicles(varea),
           group(newgroup),
           wait(1),
-          make_formation(newgroup, -f.id)
+          set_production(fa, nexttype),
+          make_formation(newgroup, fi = f.id)
         ])
 
   def move(self, me: Player, world: World, game: Game, move: Move):
@@ -156,10 +181,11 @@ class MyStrategy:
       if self.no_priority_change > 10:
         self.priority = None
       if len(to_remove) > 0:
-        for i in to_remove:
+        for i in sorted(to_remove, reverse = True):
           if self.priority == i:
             self.priority = None
-          self.formations.pop(i)
+          if i>0 and i < len(self.formations):
+            self.formations.pop(i)
       # events no longer needed after the end of formation
       to_remove = list()
       for i in reversed(self.events):

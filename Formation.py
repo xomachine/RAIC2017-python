@@ -61,10 +61,10 @@ class Formation:
           else:
             self.delayed = None
 #        if m.action and m.action != ActionType.NONE:
-#          if m.action == ActionType.MOVE:
-#            self.last_direction = Unit(None, m.x,  m.y)
-#          else:
-#            self.last_direction = None
+##          if m.action == ActionType.MOVE:
+##            self.last_direction = Unit(None, m.x,  m.y)
+##          else:
+##            self.last_direction = None
 #          print("Taken action " + str(m.action) + " by " + str(behavior) + " in " + str(self))
 #        else:
 #          print("Group ",  self.group,  " skipped action via ",  behavior)

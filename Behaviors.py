@@ -21,7 +21,7 @@ class Behavior:
   def on_tick(self, world: World, state: WorldState, player: Player, game: Game, move: Move):
     return False
 
-class DontStuck(Behavior):
+class Capture(Behavior):
   def on_tick(self, ws: WorldState, world: World, player: Player, game: Game):
     formationcenter = get_center(ws.vehicles.resolve(self.holder.units(ws.vehicles)))
     tol = 20
@@ -50,6 +50,7 @@ class Nuke(Behavior):
     if player.remaining_nuclear_strike_cooldown_ticks > 0 or NuclearAlert.on_tick(self, ws, world, player, game):
       self.acting = False
       return False
+    #print("Nuke ready")
     formationcenter = get_center(ws.vehicles.resolve(self.holder.units(ws.vehicles)))
     mindistance = 2000
     for c in ws.vehicles.by_cluster(ws.vehicles.opponent):
@@ -248,6 +249,7 @@ class Chase(Behavior):
         maxvalue = value
         if clusterdistance < 100:
           break
+    #print("Resultvalue:",  maxvalue)
     if maxvalue <=0:
       #print("Minimal cluster was not found")
       fromedge = from_edge(w, formationcenter)
